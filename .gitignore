@@ -1,0 +1,34 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# Backups y Archivos de sistema
+*.tar.gz
+*.tar
+*.zip
+_tar_extract/
+broken_encoder_version.tar.gz
+project_updated/
+project_updated_downloaded/
+
+# Scripts temporales de depuracin (opcional, pero recomendado)
+debug_*.py
+test_*.py
+fix_*.py
+check_*.py
+apply_fix.py
+final_fix.py
+quick_fix.py
+temp_log.txt
+*.png
+*.txt
+
+# IDEs
+.vscode/
+.idea/
+.claude/

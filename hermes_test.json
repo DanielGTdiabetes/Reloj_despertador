@@ -1,0 +1,4 @@
+{
+  "target": "bmax",
+  "command": "sshpass -p '26021980' ssh -o StrictHostKeyChecking=no dani@192.168.0.204 \"echo '26021980' | sudo -S systemctl status reloj --no-pager && echo '---RESTARTS---' && echo '26021980' | sudo -S journalctl -u reloj --no-pager -n 100 | grep -E 'Started|Starting|error|Error|failed|Failed|restart|Restart'\""
+}

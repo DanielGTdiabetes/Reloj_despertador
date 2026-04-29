@@ -1,0 +1,79 @@
+{
+    "wifi": {
+        "ssid": "",
+        "password": ""
+    },
+    "weather": {
+        "api_key": "bc0fbcb8537c4c41d664f7ec6b0d6133",
+        "location": "Vila-real",
+        "lat": 39.94,
+        "lon": -0.10,
+        "timezone": "Europe/Madrid",
+        "update_interval_minutes": 10,
+        "forecast_rotation_minutes": 5
+    },
+    "location": {
+        "city": "Vila-real",
+        "region": "Castellon",
+        "country": "Espana",
+        "lat": 39.94,
+        "lon": -0.10,
+        "postal_code": "12540"
+    },
+    "displays": {
+        "round": {
+            "driver": "GC9A01",
+            "width": 240,
+            "height": 240,
+            "spi_port": 0,
+            "spi_device": 0,
+            "dc_pin": 25,
+            "rst_pin": 26,
+            "bl_pin": null
+        },
+        "rect": {
+            "driver": "ST7789",
+            "width": 284,
+            "height": 76,
+            "spi_port": 0,
+            "spi_device": 1,
+            "cs_pin": 7,
+            "dc_pin": 22,
+            "rst_pin": 27,
+            "bl_pin": 23,
+            "col_offset": 82,
+            "row_offset": 18
+        }
+    },
+    "encoder": {
+        "clk_pin": 5,
+        "dt_pin": 6,
+        "sw_pin": 13
+    },
+    "audio": {
+        "enabled": true,
+        "device": "max98357a",
+        "alarm_sounds": [
+            "src/assets/sounds/alarm1.wav",
+            "src/assets/sounds/alarm2.wav"
+        ]
+    },
+    "alarm": {
+        "enabled": false,
+        "hour": 7,
+        "minute": 0,
+        "days": [0, 1, 2, 3, 4, 5, 6],
+        "snooze_minutes": 5,
+        "volume": 80
+    },
+    "ntp": {
+        "servers": ["pool.ntp.org", "time.nist.gov"],
+        "sync_interval_hours": 6
+    },
+    "ui": {
+        "brightness_round": 80,
+        "brightness_rect": 80,
+        "theme": "dark",
+        "language": "es"
+    }
+}
