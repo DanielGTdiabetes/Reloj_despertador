@@ -5,6 +5,9 @@ import signal
 import subprocess
 import threading
 import time
+import traceback
+
+import RPi.GPIO as GPIO
 
 from config_loader import load_config, save_config
 from hardware.audio import I2SAudio
@@ -45,6 +48,10 @@ class AlarmClockApp:
     CONFIG_PATH = str(DEFAULT_CONFIG_PATH)
 
     def __init__(self):
+        # GPIO se configura UNA sola vez al arranque. Los drivers solo hacen GPIO.setup().
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setwarnings(False)
+
         self.flags = RuntimeFlags.from_env()
         self.config = self._load_config()
         self.running = True
@@ -136,6 +143,7 @@ class AlarmClockApp:
                 print("[HW] encoder OK")
             except Exception as exc:
                 print(f"[HW] encoder failed: {exc}")
+                traceback.print_exc()
 
         if self.flags.disable_audio:
             print("[HW] audio disabled by env")
@@ -148,6 +156,7 @@ class AlarmClockApp:
                     print("[HW] audio OK")
             except Exception as exc:
                 print(f"[HW] audio failed: {exc}")
+                traceback.print_exc()
 
     def _register_signals(self):
         signal.signal(signal.SIGINT, self._stop_signal)

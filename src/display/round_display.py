@@ -14,6 +14,7 @@ class RoundDisplay:
         self._display = GC9A01(
             spi_port=self._cfg.get("spi_port", 0),
             spi_device=self._cfg.get("spi_device", 0),
+            cs_pin=self._cfg.get("cs_pin", 8),
             dc_pin=self._cfg.get("dc_pin", 25),
             rst_pin=self._cfg.get("rst_pin", 26),
             bl_pin=self._cfg.get("bl_pin"),

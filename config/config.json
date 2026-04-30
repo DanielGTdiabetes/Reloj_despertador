@@ -27,6 +27,7 @@
             "height": 240,
             "spi_port": 0,
             "spi_device": 0,
+            "cs_pin": 8,
             "dc_pin": 25,
             "rst_pin": 26,
             "bl_pin": null

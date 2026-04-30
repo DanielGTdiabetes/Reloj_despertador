@@ -27,8 +27,6 @@ class RotaryEncoder:
         }
         self._long_press_threshold = 1.1
 
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setwarnings(False)
         GPIO.setup(self.clk_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.setup(self.dt_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.setup(self.sw_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
