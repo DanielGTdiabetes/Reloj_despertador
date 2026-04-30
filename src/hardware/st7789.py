@@ -121,7 +121,7 @@ class ST7789Display:
         self._write_cmd_data(self.CMD_FRCTR2,   [0x0F])
         self._write_cmd_data(self.CMD_PWCTRL1,  [0xA4, 0xA1])
 
-        self._write_cmd_data(self.CMD_INVOFF)
+        self._write_cmd_data(self.CMD_INVON)
         self._write_cmd_data(self.CMD_NORON)
         self._write_cmd_data(self.CMD_DISPON)
         time.sleep(0.1)
