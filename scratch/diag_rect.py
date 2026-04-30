@@ -97,9 +97,9 @@ cmd_data(0x13)  # NORON
 cmd_data(0x29)  # DISPON
 time.sleep(0.1)
 
-# Set window: col_offset=18, row_offset=82
+# Set window: recovered physical orientation, col_offset=82, row_offset=18
 W, H = 284, 76
-co, ro = 18, 82
+co, ro = 82, 18
 xs, xe = co, co + W - 1
 ys, ye = ro, ro + H - 1
 cmd_data(0x2A, [xs >> 8, xs & 0xFF, xe >> 8, xe & 0xFF])

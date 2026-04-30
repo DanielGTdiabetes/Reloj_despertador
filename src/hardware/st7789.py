@@ -4,7 +4,7 @@ ST7789P3 display driver for the 284x76 rectangular panel.
 Validated variant E:
 - SPI0 CE1, with GPIO7 used as manual chip select.
 - MADCTL 0xA8, COLMOD 0x05.
-- col_offset 18, row_offset 82.
+- col_offset 82, row_offset 18.
 - 4 MHz SPI to keep the Pi Zero W stable on the shared bus.
 - Active-low backlight on GPIO23.
 - RGB565 normal, sin swap.
@@ -55,8 +55,8 @@ class ST7789Display:
         dc_pin=22,
         rst_pin=27,
         bl_pin=23,
-        col_offset=18,
-        row_offset=82,
+        col_offset=82,
+        row_offset=18,
     ):
         self.cs_pin = cs_pin
         self.dc_pin = dc_pin
@@ -158,7 +158,7 @@ class ST7789Display:
         buf = bytearray(self.WIDTH * self.HEIGHT * 2)
         idx = 0
         for r, g, b in pixels:
-            # RGB565 normal — MADCTL BGR=1 gestiona el orden de subpíxeles
+            # RGB565 normal; MADCTL BGR=1 handles the subpixel order.
             color = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
             buf[idx] = (color >> 8) & 0xFF
             buf[idx + 1] = color & 0xFF

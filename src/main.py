@@ -141,8 +141,8 @@ class AlarmClockApp:
                 dc_pin=cfg.get("dc_pin", 22),
                 rst_pin=cfg.get("rst_pin", 27),
                 bl_pin=cfg.get("bl_pin", 23),
-                col_offset=cfg.get("col_offset", 18),
-                row_offset=cfg.get("row_offset", 82),
+                col_offset=cfg.get("col_offset", 82),
+                row_offset=cfg.get("row_offset", 18),
             )
             self.rect_display.set_brightness(self.brightness_rect)
             print("[HW] rect display OK")
