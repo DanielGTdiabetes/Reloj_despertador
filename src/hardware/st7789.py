@@ -1,18 +1,23 @@
 """
 ST7789P3 display driver for the 284x76 rectangular panel.
 
-This uses the configuration that was recorded as working on the Pi:
-SPI0 CE1, MADCTL 0x08, col offset 82, row offset 18, INVOFF,
-10 MHz SPI and active-low backlight.
+Validated variant E:
+- SPI0 CE1, with GPIO7 used as manual chip select.
+- MADCTL 0xA8, COLMOD 0x05.
+- col_offset 18, row_offset 82.
+- 4 MHz SPI to keep the Pi Zero W stable on the shared bus.
+- Active-low backlight on GPIO23.
 """
 
-import spidev
-import RPi.GPIO as GPIO
 import time
+
 from PIL import Image, ImageDraw
+import RPi.GPIO as GPIO
+import spidev
+
 
 class ST7789Display:
-    """Driver for the wide 284x76 ST7789P3 LCD."""
+    """Driver for the ST7789P3 284x76 rectangular LCD."""
 
     WIDTH = 284
     HEIGHT = 76
@@ -48,8 +53,8 @@ class ST7789Display:
         dc_pin=22,
         rst_pin=27,
         bl_pin=23,
-        col_offset=82,
-        row_offset=18,
+        col_offset=18,
+        row_offset=82,
     ):
         self.cs_pin = cs_pin
         self.dc_pin = dc_pin
@@ -60,15 +65,21 @@ class ST7789Display:
 
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
+        GPIO.setup(self.cs_pin, GPIO.OUT)
         GPIO.setup(self.dc_pin, GPIO.OUT)
         GPIO.setup(self.rst_pin, GPIO.OUT)
         GPIO.setup(self.bl_pin, GPIO.OUT)
+        GPIO.output(self.cs_pin, GPIO.HIGH)
         GPIO.output(self.bl_pin, GPIO.HIGH)
 
         self.spi = spidev.SpiDev()
         self.spi.open(spi_port, spi_device)
-        self.spi.max_speed_hz = 10000000
+        self.spi.max_speed_hz = 4_000_000
         self.spi.mode = 0b00
+        try:
+            self.spi.no_cs = True
+        except Exception:
+            pass
 
         self.framebuffer = Image.new("RGB", (self.WIDTH, self.HEIGHT), (0, 0, 0))
         self.draw = ImageDraw.Draw(self.framebuffer)
@@ -77,18 +88,22 @@ class ST7789Display:
 
     def _write_command(self, cmd):
         GPIO.output(self.dc_pin, GPIO.LOW)
+        GPIO.output(self.cs_pin, GPIO.LOW)
         self.spi.writebytes([cmd])
+        GPIO.output(self.cs_pin, GPIO.HIGH)
 
     def _write_data(self, data):
         GPIO.output(self.dc_pin, GPIO.HIGH)
+        GPIO.output(self.cs_pin, GPIO.LOW)
         if isinstance(data, int):
             self.spi.writebytes([data])
         else:
             self.spi.writebytes(list(data))
+        GPIO.output(self.cs_pin, GPIO.HIGH)
 
     def _write_cmd_data(self, cmd, data=None):
         self._write_command(cmd)
-        if data:
+        if data is not None:
             self._write_data(data)
 
     def _init_display(self):
@@ -97,16 +112,15 @@ class ST7789Display:
         GPIO.output(self.rst_pin, GPIO.LOW)
         time.sleep(0.01)
         GPIO.output(self.rst_pin, GPIO.HIGH)
-        time.sleep(0.1)
+        time.sleep(0.12)
 
         self._write_cmd_data(self.CMD_SWRESET)
-        time.sleep(0.1)
-
+        time.sleep(0.15)
         self._write_cmd_data(self.CMD_SLPOUT)
-        time.sleep(0.1)
+        time.sleep(0.12)
 
-        self._write_cmd_data(self.CMD_MADCTL, [0x08])
-        self._write_cmd_data(self.CMD_COLMOD, [0x55])
+        self._write_cmd_data(self.CMD_MADCTL, [0xA8])
+        self._write_cmd_data(self.CMD_COLMOD, [0x05])
         self._write_cmd_data(self.CMD_PORCTRL, [0x0C, 0x0C, 0x00, 0x33, 0x33])
         self._write_cmd_data(self.CMD_GCTRL, [0x35])
         self._write_cmd_data(self.CMD_VCOMS, [0x2B])
@@ -135,24 +149,28 @@ class ST7789Display:
             self.framebuffer = image.convert("RGB")
             self.draw = ImageDraw.Draw(self.framebuffer)
 
+        self._set_window()
+        self._write_command(self.CMD_RAMWR)
+
         pixels = self.framebuffer.getdata()
         buf = bytearray(self.WIDTH * self.HEIGHT * 2)
         idx = 0
         for r, g, b in pixels:
-            color = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+            # This ST7789P3 variant has MADCTL BGR set; compensate here so blue
+            # UI elements do not appear red on the physical panel.
+            color = ((b & 0xF8) << 8) | ((g & 0xFC) << 3) | (r >> 3)
             buf[idx] = (color >> 8) & 0xFF
             buf[idx + 1] = color & 0xFF
             idx += 2
 
-        self._set_window()
-        self._write_command(self.CMD_RAMWR)
-
         GPIO.output(self.dc_pin, GPIO.HIGH)
+        GPIO.output(self.cs_pin, GPIO.LOW)
         try:
             self.spi.writebytes2(buf)
         except Exception:
             for i in range(0, len(buf), 4096):
                 self.spi.writebytes(list(buf[i:i + 4096]))
+        GPIO.output(self.cs_pin, GPIO.HIGH)
 
     def set_brightness(self, percent):
         percent = max(0, min(100, percent))
@@ -168,5 +186,5 @@ class ST7789Display:
 
     def cleanup(self):
         self._write_cmd_data(self.CMD_SLPIN)
-        GPIO.cleanup([self.dc_pin, self.rst_pin, self.bl_pin])
+        GPIO.cleanup([self.cs_pin, self.dc_pin, self.rst_pin, self.bl_pin])
         self.spi.close()

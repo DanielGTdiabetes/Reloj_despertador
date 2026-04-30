@@ -1,12 +1,15 @@
+import os
+
 from PIL import Image, ImageDraw
 
-from graphics.icons import draw_weather_icon, fit_text, gradient, load_font, text_size
+from graphics.icons import condition_kind, fit_text, gradient, load_font, text_size
 
 
 class RectUIScreen:
     WIDTH = 284
     HEIGHT = 76
     DAYS = ["L", "M", "X", "J", "V", "S", "D"]
+    ICON_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets", "weather"))
 
     def __init__(self, scale=2):
         self.scale = scale
@@ -16,44 +19,46 @@ class RectUIScreen:
         self.font_small = load_font(10 * scale)
         self.font_med = load_font(13 * scale)
         self.font_big = load_font(20 * scale)
+        self._icons = {}
 
     def render_forecast(self, daily):
         img = gradient((self.rw, self.rh), (9, 17, 33), (16, 30, 54))
         draw = ImageDraw.Draw(img)
         s = self.scale
-        days = (daily or [])[:7]
+        days = (daily or [])[:5]
         if not days:
             return self._empty("Sin prediccion")
 
-        pad = int(5 * s)
-        gap = int(3 * s)
-        card_w = (self.rw - pad * 2 - gap * 6) // 7
-        card_h = self.rh - pad * 2
+        pad_x = int(6 * s)
+        pad_y = int(4 * s)
+        gap = int(4 * s)
+        card_w = (self.rw - pad_x * 2 - gap * 4) // 5
+        card_h = self.rh - pad_y * 2
 
-        for i in range(7):
+        for i in range(5):
             day = days[i] if i < len(days) else {}
-            x1 = pad + i * (card_w + gap)
-            y1 = pad
+            x1 = pad_x + i * (card_w + gap)
+            y1 = pad_y
             x2 = x1 + card_w
             y2 = y1 + card_h
             self._card(draw, x1, y1, x2, y2, i)
 
             wd = day.get("weekday", i) % 7
             label = self.DAYS[wd]
-            draw.text((x1 + card_w // 2, y1 + int(1 * s)), label,
-                      fill=(255, 255, 255), font=self.font_small, anchor="ma")
+            draw.text((x1 + card_w // 2, y1 + int(2 * s)), label,
+                      fill=(245, 250, 255), font=self.font_small, anchor="ma")
 
-            draw_weather_icon(draw, x1 + card_w // 2, y1 + int(25 * s),
-                              int(22 * s), day.get("description", "clear"))
+            self._paste_weather_icon(img, x1 + card_w // 2, y1 + int(31 * s),
+                                     int(43 * s), day.get("description", "clear"))
 
             high = day.get("temp_max")
             low = day.get("temp_min")
             if high is not None:
-                draw.text((x1 + card_w // 2, y2 - int(22 * s)), f"{round(high)}",
-                          fill=(255, 158, 95), font=self.font_small, anchor="ma")
+                draw.text((x1 + int(12 * s), y2 - int(15 * s)), f"{round(high)}",
+                          fill=(255, 176, 92), font=self.font_small, anchor="ma")
             if low is not None:
-                draw.text((x1 + card_w // 2, y2 - int(10 * s)), f"{round(low)}",
-                          fill=(110, 205, 255), font=self.font_tiny, anchor="ma")
+                draw.text((x2 - int(12 * s), y2 - int(15 * s)), f"{round(low)}",
+                          fill=(120, 216, 255), font=self.font_tiny, anchor="ma")
 
         return img.resize((self.WIDTH, self.HEIGHT), Image.LANCZOS)
 
@@ -182,6 +187,27 @@ class RectUIScreen:
             color = tuple(int(top[i] * (1 - t) + bottom[i] * t) for i in range(3))
             draw.line((x1 + 2, y, x2 - 2, y), fill=color)
         draw.rounded_rectangle((x1, y1, x2, y2), radius=8 * self.scale, outline=(255, 255, 255), width=1)
+
+    def _paste_weather_icon(self, img, cx, cy, size, condition):
+        kind = condition_kind(condition)
+        icon = self._load_icon(kind)
+        if icon is None:
+            return
+        scaled = icon.resize((size, size), Image.LANCZOS)
+        img.paste(scaled, (int(cx - size / 2), int(cy - size / 2)), scaled)
+
+    def _load_icon(self, kind):
+        if kind in self._icons:
+            return self._icons[kind]
+        path = os.path.join(self.ICON_DIR, f"{kind}.png")
+        if not os.path.exists(path):
+            path = os.path.join(self.ICON_DIR, "partly.png")
+        try:
+            icon = Image.open(path).convert("RGBA")
+        except Exception:
+            icon = None
+        self._icons[kind] = icon
+        return icon
 
     def _slider(self, draw, x, y, width, value, selected, label):
         s = self.scale

@@ -1,12 +1,13 @@
 import datetime as dt
 import math
+import os
+
 from PIL import Image, ImageDraw
 
 from graphics.icons import (
     apply_round_mask,
     center_text,
-    draw_moon,
-    draw_weather_icon,
+    condition_kind,
     fit_text,
     gradient,
     load_font,
@@ -17,16 +18,18 @@ from graphics.icons import (
 class RoundHomeScreen:
     WIDTH = 240
     HEIGHT = 240
+    ICON_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets", "weather"))
 
     def __init__(self, scale=2):
         self.scale = scale
         self.rw = self.WIDTH * scale
         self.rh = self.HEIGHT * scale
-        self.font_time = load_font(78 * scale)
-        self.font_date = load_font(17 * scale)
+        self.font_time = load_font(72 * scale)
+        self.font_date = load_font(15 * scale)
         self.font_small = load_font(12 * scale, bold=False)
-        self.font_medium = load_font(16 * scale)
-        self.font_temp = load_font(28 * scale)
+        self.font_medium = load_font(15 * scale)
+        self.font_temp = load_font(24 * scale)
+        self._icons = {}
 
     def render(self, now, current, sun, moon, alarm=None, status=""):
         img = self._background(sun.get("period", "day"))
@@ -35,30 +38,29 @@ class RoundHomeScreen:
         cx, cy = self.rw // 2, self.rh // 2
 
         self._draw_second_ring(draw, cx, cy, int(112 * s), now.second)
-        self._draw_sun_band(draw, sun)
 
         condition = current.get("description") or current.get("main") or "despejado"
         temp = current.get("temp")
         is_night = sun.get("period") == "night"
 
-        if is_night:
-            draw_moon(draw, cx, int(45 * s), int(21 * s), moon.get("phase", 0.5))
+        if is_night and not condition:
+            self._draw_moon(draw, cx, int(50 * s), int(26 * s), moon.get("phase", 0.5))
         else:
-            draw_weather_icon(draw, cx, int(45 * s), int(42 * s), condition)
+            self._paste_weather_icon(img, cx, int(53 * s), int(82 * s), condition)
 
         day = self._day_name(now.weekday()).upper()
         date_text = f"{day} {now.day:02d}/{now.month:02d}"
-        center_text(draw, (cx, int(75 * s)), date_text, self.font_date, (170, 220, 255))
+        center_text(draw, (cx, int(24 * s)), date_text, self.font_date, (180, 226, 255))
 
         time_text = now.strftime("%H:%M")
-        center_text(draw, (cx, int(122 * s)), time_text, self.font_time, (255, 255, 255))
+        center_text(draw, (cx, int(121 * s)), time_text, self.font_time, (255, 255, 255))
 
         temp_text = "--C" if temp is None else f"{round(float(temp))}C"
-        center_text(draw, (int(74 * s), int(164 * s)), temp_text, self.font_temp, (255, 236, 150))
+        center_text(draw, (cx, int(169 * s)), temp_text, self.font_temp, (255, 232, 126))
 
         desc = self._clean_condition(condition).upper()
-        desc_font = fit_text(draw, desc, int(126 * s), 17 * s, 9 * s)
-        draw.text((int(111 * s), int(149 * s)), desc, fill=(210, 230, 255), font=desc_font)
+        desc_font = fit_text(draw, desc, int(160 * s), 15 * s, 8 * s)
+        center_text(draw, (cx, int(193 * s)), desc, desc_font, (214, 235, 255))
 
         humidity = current.get("humidity")
         wind = current.get("wind_speed")
@@ -69,20 +71,15 @@ class RoundHomeScreen:
             details.append(f"V {round(float(wind) * 3.6)}km/h")
         if not details and status:
             details.append(status)
-        draw.text((int(112 * s), int(170 * s)), "  ".join(details[:2]), fill=(130, 175, 215), font=self.font_small)
+        center_text(draw, (cx, int(212 * s)), "  ".join(details[:2]), self.font_small, (146, 194, 230))
 
         sunrise = self._format_time(sun.get("sunrise"))
         sunset = self._format_time(sun.get("sunset"))
-        center_text(draw, (int(70 * s), int(205 * s)), f"SOL {sunrise}", self.font_small, (255, 190, 100))
-        center_text(draw, (int(170 * s), int(205 * s)), f"NOCHE {sunset}", self.font_small, (160, 185, 255))
+        self._draw_sun_band(draw, sun, sunrise, sunset)
 
-        if is_night:
-            moon_name = moon.get("name", "Luna")
-            moon_font = fit_text(draw, moon_name.upper(), int(150 * s), 12 * s, 8 * s)
-            center_text(draw, (cx, int(224 * s)), moon_name.upper(), moon_font, (205, 215, 245))
-        elif alarm and alarm.get("enabled"):
-            center_text(draw, (cx, int(224 * s)), f"ALARMA {alarm['hour']:02d}:{alarm['minute']:02d}",
-                        self.font_small, (255, 170, 120))
+        if alarm and alarm.get("enabled"):
+            center_text(draw, (cx, int(228 * s)), f"ALARMA {alarm['hour']:02d}:{alarm['minute']:02d}",
+                        self.font_small, (255, 176, 120))
 
         small = img.resize((self.WIDTH, self.HEIGHT), Image.LANCZOS)
         return apply_round_mask(small)
@@ -101,7 +98,7 @@ class RoundHomeScreen:
         elif kind == "brightness":
             self._draw_brightness(draw, cx, int(78 * s), int(40 * s))
         else:
-            draw_weather_icon(draw, cx, int(78 * s), int(58 * s), "partly")
+            self._paste_weather_icon(img, cx, int(78 * s), int(78 * s), "partly")
 
         title_font = fit_text(draw, title.upper(), int(180 * s), 25 * s, 12 * s)
         center_text(draw, (cx, int(134 * s)), title.upper(), title_font, (255, 255, 255))
@@ -114,11 +111,11 @@ class RoundHomeScreen:
 
     def _background(self, period):
         if period == "night":
-            top, bottom = (7, 11, 30), (25, 20, 58)
+            top, bottom = (5, 9, 26), (21, 18, 58)
         elif period in ("sunrise", "sunset"):
-            top, bottom = (38, 28, 68), (238, 116, 52)
+            top, bottom = (30, 25, 70), (235, 108, 54)
         else:
-            top, bottom = (13, 65, 110), (12, 22, 44)
+            top, bottom = (8, 55, 112), (7, 18, 44)
         return gradient((self.rw, self.rh), top, bottom)
 
     def _draw_second_ring(self, draw, cx, cy, radius, second):
@@ -134,15 +131,47 @@ class RoundHomeScreen:
                        cx + math.cos(a) * r2, cy + math.sin(a) * r2),
                       fill=(130, 185, 220), width=max(1, int(1.5 * s)))
 
-    def _draw_sun_band(self, draw, sun):
+    def _draw_sun_band(self, draw, sun, sunrise="", sunset=""):
         s = self.scale
-        x1, x2 = int(41 * s), int(199 * s)
-        y = int(190 * s)
-        draw.line((x1, y, x2, y), fill=(60, 95, 130), width=int(3 * s))
+        x1, x2 = int(52 * s), int(188 * s)
+        y = int(224 * s)
+        draw.line((x1, y, x2, y), fill=(57, 92, 132), width=int(2 * s))
         p = max(0.0, min(1.0, sun.get("progress", 0.0)))
-        draw.line((x1, y, x1 + int((x2 - x1) * p), y), fill=(255, 190, 75), width=int(4 * s))
+        draw.line((x1, y, x1 + int((x2 - x1) * p), y), fill=(255, 192, 82), width=int(3 * s))
         sun_x = x1 + int((x2 - x1) * p)
-        draw.ellipse((sun_x - 4 * s, y - 4 * s, sun_x + 4 * s, y + 4 * s), fill=(255, 230, 75))
+        draw.ellipse((sun_x - 3 * s, y - 3 * s, sun_x + 3 * s, y + 3 * s), fill=(255, 231, 90))
+        if sunrise and sunset:
+            draw.text((int(28 * s), int(218 * s)), sunrise, fill=(255, 196, 108), font=self.font_small, anchor="mm")
+            draw.text((int(212 * s), int(218 * s)), sunset, fill=(174, 202, 255), font=self.font_small, anchor="mm")
+
+    def _paste_weather_icon(self, img, cx, cy, size, condition):
+        icon = self._load_icon(condition_kind(condition))
+        if icon is None:
+            return
+        scaled = icon.resize((size, size), Image.LANCZOS)
+        img.paste(scaled, (int(cx - size / 2), int(cy - size / 2)), scaled)
+
+    def _load_icon(self, kind):
+        if kind in self._icons:
+            return self._icons[kind]
+        path = os.path.join(self.ICON_DIR, f"{kind}.png")
+        if not os.path.exists(path):
+            path = os.path.join(self.ICON_DIR, "partly.png")
+        try:
+            icon = Image.open(path).convert("RGBA")
+        except Exception:
+            icon = None
+        self._icons[kind] = icon
+        return icon
+
+    def _draw_moon(self, draw, cx, cy, radius, phase=0.55):
+        draw.ellipse((cx - radius, cy - radius, cx + radius, cy + radius), fill=(225, 230, 245))
+        offset = int(radius * (0.9 - abs(phase - 0.5)))
+        shadow = (18, 24, 52)
+        if phase < 0.5:
+            draw.ellipse((cx - radius + offset, cy - radius, cx + radius + offset, cy + radius), fill=shadow)
+        else:
+            draw.ellipse((cx - radius - offset, cy - radius, cx + radius - offset, cy + radius), fill=shadow)
 
     def _draw_wifi(self, draw, cx, cy, size):
         for i in range(3):
@@ -178,4 +207,3 @@ class RoundHomeScreen:
         if len(text) > 16:
             text = text[:15] + "."
         return text
-

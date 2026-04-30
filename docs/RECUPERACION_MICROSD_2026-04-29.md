@@ -5,6 +5,18 @@
 Esta preparacion parte de la memoria de Obsidian y del estado local del proyecto
 tras la incidencia de la pantalla rectangular.
 
+## Backup base disponible
+
+Antes de seguir con limpieza o cambios de UI se creo una copia offline de la
+microSD actual desde el BMAX:
+
+- Backup: `/home/dani/backups/reloj_despertador/baseline_sd_20260430_043028`
+- Documentacion: `docs/BACKUP_BASE_SD_2026-04-30.md`
+- Estado que representa: codigo/pantallas como base buena, pero WiFi roto en el
+  momento de la captura.
+- Arreglo posterior: se creo un perfil persistente de NetworkManager para WiFi
+  en la microSD, sin tocar codigo de la app ni `config.txt`.
+
 Reglas criticas:
 
 - No volver a SPI1. Entra en conflicto con I2S/MAX98357A.
