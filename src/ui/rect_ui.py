@@ -1,6 +1,6 @@
 """
-rect_ui.py — Versión Centrada Visualmente (W=284).
-Ajuste de margen para corregir desplazamiento a la derecha.
+rect_ui.py — Centrado Visual por Software.
+Aumentado el PAD para compensar el hueco derecho.
 """
 from __future__ import annotations
 import time
@@ -13,11 +13,11 @@ from .theme import (
 )
 from .weather_icons import draw_weather_icon
 
-# W=284 es el ancho original que respeta tus offsets de 18
+# Mantenemos W=284 para respetar tus offsets de 18
 W, H = 284, 76
-# Reducimos el PAD inicial para mover todo a la izquierda
-PAD  = 2 
-GAP  = 8
+# Aumentamos PAD a 12 para empujar los marcos a la derecha y centrarlos
+PAD  = 12 
+GAP  = 6
 
 def _create_v_gradient(w, h, color1, color2) -> Image.Image:
     grad = Image.new("RGB", (1, 2))
@@ -37,6 +37,7 @@ class RectUIScreen:
         img  = Image.new("RGB", (W, H), BG)
         days = forecast_data[1:5]
         n    = 4
+        # Calculamos el ancho de tarjeta basándonos en el nuevo PAD
         card_w = (W - PAD*2 - GAP*(n-1)) // n
         card_h = H - PAD*2
 
@@ -75,7 +76,7 @@ class RectUIScreen:
             slot = i - (index - 1)
             x1, x2 = slot * item_w, (slot+1) * item_w
             if i == index:
-                draw.rounded_rectangle([x1+5, 5, x1+item_w-5, H-5], radius=12, outline=CYAN, width=2)
+                draw.rounded_rectangle([x1+8, 5, x1+item_w-8, H-5], radius=12, outline=CYAN, width=2)
                 draw_menu_icon(draw, x1+(item_w-34)//2, 12, 34, items[i][0])
                 _text_center_x(draw, 52, items[i][1].upper(), F.menu_label, WHITE, x1, x2)
             else:
@@ -85,7 +86,7 @@ class RectUIScreen:
     def render_location(self, digits, active_idx, updating=False) -> Image.Image:
         img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
         _text_center_x(draw, 6, "CÓDIGO POSTAL", F.small, CYAN, 0, W)
-        box_w, box_h = 28, 38
+        box_w, box_h = 30, 38
         x_start = (W - (box_w*5 + 24)) // 2
         for i, digit in enumerate(digits[:5]):
             x = x_start + i * (box_w + 6)
@@ -96,7 +97,7 @@ class RectUIScreen:
 
     def render_alarm(self, alarm, field) -> Image.Image:
         img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
-        draw.rounded_rectangle([20, 8, W-20, H-8], radius=12, fill=DARK_CARD)
+        draw.rounded_rectangle([30, 8, W-30, H-8], radius=12, fill=DARK_CARD)
         _text_center_x(draw, 34, f"{alarm.get('hour',7):02d}:{alarm.get('minute',0):02d}", F.clock, WHITE, 0, W)
         return img
 
@@ -104,23 +105,23 @@ class RectUIScreen:
         img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
         for i, (lbl, val, act) in enumerate([("REDONDA", r, target=="round"), ("RECT", rect, target=="rect")]):
             y = 16 + i * 28; col = CYAN if act else DIM_WHITE
-            draw.text((28, y), lbl, font=F.small, fill=col)
-            draw.rectangle([100, y+4, 232, y+10], fill=DARK_CARD)
-            draw.rectangle([100, y+4, 100+int(132*val/100), y+10], fill=col)
+            draw.text((35, y), lbl, font=F.small, fill=col)
+            draw.rectangle([115, y+4, 255, y+10], fill=DARK_CARD)
+            draw.rectangle([115, y+4, 115+int(140*val/100), y+10], fill=col)
         return img
 
     def render_wifi_scan(self, nets, index, scanning) -> Image.Image:
         img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
         if scanning: _text_center_x(draw, 28, "BUSCANDO REDES...", F.menu_label, CYAN, 0, W)
         elif nets:
-            draw.rounded_rectangle([20, 8, W-20, H-8], radius=10, fill=DARK_CARD)
+            draw.rounded_rectangle([30, 8, W-30, H-8], radius=10, fill=DARK_CARD)
             _text_center_x(draw, 32, nets[index].get("ssid", "")[:22], F.menu_label, WHITE, 0, W)
         return img
 
     def render_wifi_keyboard(self, ssid, password, groups, group, char, level) -> Image.Image:
         img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
-        draw.rectangle([16, 22, W-16, 42], outline=WHITE, width=1)
-        draw.text((20, 25), password[:22], font=F.menu_label, fill=WHITE)
+        draw.rectangle([20, 22, W-20, 42], outline=WHITE, width=1)
+        draw.text((24, 25), password[:22], font=F.menu_label, fill=WHITE)
         _text_center_x(draw, 50, groups[group], F.menu_label, PURPLE, 0, W)
         return img
 
