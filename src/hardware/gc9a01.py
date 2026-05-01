@@ -75,8 +75,8 @@ class GC9A01:
         GPIO.output(self.cs_pin, GPIO.HIGH)
         if self.bl_pin is not None:
             GPIO.setup(self.bl_pin, GPIO.OUT)
-            # Aumentamos a 2000Hz para estabilizar el parpadeo del software PWM
-            self._pwm = GPIO.PWM(self.bl_pin, 2000)
+            # Bajamos a 200Hz para máxima estabilidad del software PWM
+            self._pwm = GPIO.PWM(self.bl_pin, 200)
             self._pwm.start(0)  # Empezamos apagados
 
         self.framebuffer = Image.new("RGB", (self.WIDTH, self.HEIGHT), (0, 0, 0))

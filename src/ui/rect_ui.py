@@ -39,24 +39,20 @@ class RectUIScreen:
         card_w = (W - PAD_X*2 - GAP*(n-1)) // n
         card_h = H - PAD_Y*2
 
-        GRAD_COLORS = [
-            ((100, 80, 200), (40, 30, 100)),
-            ((60, 140, 220), (20, 60, 120)),
-            ((80, 160, 100), (30, 80, 50)),
-            ((200, 100, 60), (100, 40, 20)),
-        ]
-
         for i in range(n):
             day  = days[i] if i < len(days) else {}
             x1   = PAD_X + i * (card_w + GAP)
-            c1, c2 = GRAD_COLORS[i % len(GRAD_COLORS)]
-            card_img = _create_v_gradient(card_w, card_h, c1, c2)
+            
+            # Fondo de tarjeta Gris Carbón muy sutil
+            card_img = Image.new("RGB", (card_w, card_h), (20, 22, 28))
             mask     = Image.new("L", (card_w, card_h), 0)
             ImageDraw.Draw(mask).rounded_rectangle([0, 0, card_w, card_h], radius=8, fill=255)
             img.paste(card_img, (x1, PAD_Y), mask)
+            
             draw = ImageDraw.Draw(img)
+            # Borde sutil
             draw.rounded_rectangle([x1, PAD_Y, x1+card_w, PAD_Y+card_h],
-                                   radius=8, outline=(255,255,255,30), width=1)
+                                   radius=8, outline=(40, 45, 55), width=1)
             wd = day.get("weekday", (time.localtime().tm_wday + i + 1) % 7)
             _text_center_x(draw, PAD_Y+1, ["LUN","MAR","MIE","JUE","VIE","SAB","DOM"][wd], F.card_day, WHITE, x1, x1+card_w)
             

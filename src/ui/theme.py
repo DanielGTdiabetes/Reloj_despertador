@@ -12,7 +12,7 @@ _FONTS = os.path.join(_ASSETS, "fonts")
 _ICONS = os.path.join(_ASSETS, "weather")
 _MENU_ICONS = os.path.join(_ASSETS, "menu_icons")
 
-BG = (5, 10, 25)
+BG = (0, 0, 0) # Negro Puro para máximo contraste
 CYAN = (120, 225, 255)
 PURPLE = (190, 140, 255)
 WHITE = (255, 255, 255)
