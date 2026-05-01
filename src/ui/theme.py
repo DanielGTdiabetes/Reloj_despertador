@@ -1,5 +1,5 @@
 """
-theme.py — Tamaños equilibrados para Pi Zero.
+theme.py — Ajuste fino de tipografía (Reloj 68px).
 """
 from __future__ import annotations
 import os
@@ -37,8 +37,8 @@ def _ttf(name: str, size: int) -> ImageFont.FreeTypeFont:
 
 class _Fonts:
     def __init__(self):
-        self.clock = _ttf("arialbd.ttf", 74)       # Reducido de 84 a 74 para que no solape
-        self.date_top = _ttf("arialbd.ttf", 20)    # Ajustado
+        self.clock = _ttf("arialbd.ttf", 68)       # Reducido a 68 para equilibrio perfecto
+        self.date_top = _ttf("arialbd.ttf", 20)
         self.weather_sub = _ttf("arialbd.ttf", 14) 
         self.temp_big = _ttf("arialbd.ttf", 26)    
         self.card_day = _ttf("arialbd.ttf", 13)
