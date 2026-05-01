@@ -1,6 +1,6 @@
 """
-round_home.py — Versión con Indicador de Alarma Lateral.
-Campana situada a la izquierda del icono meteorológico.
+round_home.py — Margen de Seguridad para Descripciones.
+Desplazado el texto inferior para evitar solapamientos con iconos grandes.
 """
 from __future__ import annotations
 import math
@@ -32,25 +32,19 @@ class RoundHomeScreen:
         draw.ellipse([sx-5, sy-5, sx+5, sy+5], fill=(255, 200, 60))
 
     def _draw_sidebar_alarm(self, img, alarm):
-        """Dibuja la campana en el lateral izquierdo."""
         enabled = alarm.get("enabled", False)
-        # Posición: centrado entre el anillo (x=6) y el icono central (x=120) -> x=63
         ax, ay = 63, 148 
         size = 24
-        
-        # Intentamos cargar el icono de alarma premium
         try:
             icon_path = os.path.join(os.path.dirname(__file__), "..", "assets", "menu_icons", "alarm.png")
             if os.path.exists(icon_path):
                 icon = Image.open(icon_path).convert("RGBA").resize((size, size))
                 if not enabled:
-                    # Si está desactivada, la hacemos muy oscura/gris
                     alpha = icon.getchannel('A')
                     icon = Image.new("RGBA", (size, size), (60, 65, 80, 255))
                     icon.putalpha(alpha)
                 img.paste(icon, (ax - size//2, ay - size//2), icon)
             else:
-                # Fallback con dibujo simple si no hay PNG
                 draw = ImageDraw.Draw(img)
                 col = AMBER if enabled else (60, 65, 80)
                 draw.text((ax-10, ay-10), "🔔" if enabled else "🔕", font=F.weather_sub, fill=col)
@@ -81,17 +75,17 @@ class RoundHomeScreen:
         draw.text((start_mm, 108), min_txt, font=F.weather_sub, fill=CYAN)
         draw.text((start_mm + (bb_min[2]-bb_min[0]) + 20, 108), max_txt, font=F.weather_sub, fill=AMBER)
 
-        # 4. Icono Central
+        # 4. Icono Central (Posición fija)
         desc = (weather.get("description") or "").upper()
         draw_weather_icon(img, desc, CX, 140, size=55)
 
         # 5. Indicador de Alarma LATERAL
         self._draw_sidebar_alarm(img, alarm)
 
-        # 6. Desc y Temp Inferior
-        _text_center(draw, 172, desc[:22], F.small, DIM_WHITE)
+        # 6. Desc y Temp (Bajamos 5-8 píxeles para que no toquen el icono)
+        _text_center(draw, 178, desc[:22], F.small, DIM_WHITE)
         temp = weather.get("temp")
-        _text_center(draw, 186, f"{temp:.1f}\u00b0C" if temp else "--.-°C", F.temp_big, CYAN)
+        _text_center(draw, 194, f"{temp:.1f}\u00b0C" if temp else "--.-°C", F.temp_big, CYAN)
 
         return img
 

@@ -1,6 +1,6 @@
 """
-rect_ui.py — Versión con Iconos Extra-Grandes (46px).
-Máximo tamaño posible manteniendo el centrado perfecto.
+rect_ui.py — Versión con Margen de Seguridad Anti-Lluvia (42px).
+Evita que el icono pise la temperatura en días de lluvia.
 """
 from __future__ import annotations
 import time
@@ -30,7 +30,7 @@ def _text_center_x(draw, y, text, font, fill, x0, x1):
     draw.text((x0 + (x1 - x0 - tw) // 2, y), text, font=font, fill=fill)
 
 class RectUIScreen:
-    ICON_SIZE = 46   # Subido a 46px para máxima visibilidad
+    ICON_SIZE = 42   # Bajamos a 42 para dejar hueco a las gotas de lluvia
 
     def render_forecast(self, forecast_data: list) -> Image.Image:
         img  = Image.new("RGB", (W, H), BG)
@@ -60,8 +60,8 @@ class RectUIScreen:
             wd = day.get("weekday", (time.localtime().tm_wday + i + 1) % 7)
             _text_center_x(draw, PAD_Y+1, ["LUN","MAR","MIE","JUE","VIE","SAB","DOM"][wd], F.card_day, WHITE, x1, x1+card_w)
             
-            # Icono Extra-Grande centrado
-            draw_weather_icon(img, day.get("description", ""), x1 + card_w // 2, PAD_Y + 12 + self.ICON_SIZE // 2, size=self.ICON_SIZE)
+            # Icono 42px y ligeramente más arriba (y=32 en lugar de 37) para dar aire abajo
+            draw_weather_icon(img, day.get("description", ""), x1 + card_w // 2, PAD_Y + 10 + self.ICON_SIZE // 2, size=self.ICON_SIZE)
             
             tmax = day.get("temp_max")
             if tmax is not None:
