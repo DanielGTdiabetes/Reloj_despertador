@@ -492,7 +492,7 @@ class AlarmClockApp:
         if self.state == State.WIFI_PASSWORD:
             return self.ui_round.render_focus("Contrasena", self.wifi_ssid[:16], "wifi", "*" * min(len(self.wifi_password), 8))
         if self.state == State.ALARM_RINGING:
-            return self.ui_round.render_focus("ALARMA", "Pulsa para elegir", "alarm", "Detener" if self.ring_option == 0 else "Posponer")
+            return self.ui_round.render_alarm_ringing()
         return None
 
     def _render_rect(self, now):
