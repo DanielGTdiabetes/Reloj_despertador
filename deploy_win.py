@@ -69,32 +69,8 @@ def deploy():
     print("Extracting and verifying...")
     merge_script = f"""
 cd {remote_path}
-cp config/config.json /tmp/reloj_config_before_deploy.json 2>/dev/null || true
+rm -rf src config
 tar -xf project_updated.tar
-python3 - <<'PY'
-import json, os
-before_path = '/tmp/reloj_config_before_deploy.json'
-after_path = 'config/config.json'
-preserve = {list(PRESERVE_CONFIG_KEYS)!r}
-if os.path.exists(before_path) and os.path.exists(after_path):
-    with open(before_path, encoding='utf-8') as f:
-        before = json.load(f)
-    with open(after_path, encoding='utf-8') as f:
-        after = json.load(f)
-    for key in preserve:
-        if key in before:
-            after[key] = before[key]
-    before_wifi = before.get('wifi', {{}})
-    after_wifi = after.get('wifi', {{}})
-    before_had_wifi = bool(before_wifi.get('ssid') or before_wifi.get('password'))
-    after_has_wifi = bool(after_wifi.get('ssid') or after_wifi.get('password'))
-    if before_had_wifi and not after_has_wifi:
-        raise SystemExit('Refusing deploy: remote wifi config would be cleared')
-    tmp = after_path + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as f:
-        json.dump(after, f, indent=4, ensure_ascii=False)
-    os.replace(tmp, after_path)
-PY
 cd src && python3 -c "from ui.weather_icons import render_weather_icon; from ui.round_home import RoundHomeScreen; from ui.rect_ui import RectUIScreen; from ui.theme import draw_menu_icon; print('Importaciones OK')"
 """
     stdin, stdout, stderr = ssh.exec_command(merge_script)
