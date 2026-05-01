@@ -98,18 +98,26 @@ class RectUIScreen:
 
     def render_alarm(self, alarm, field) -> Image.Image:
         img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
+        enabled = alarm.get("enabled", False)
+        
         # Recuadro centrado
         draw.rounded_rectangle([20, 10, W-20, H-10], radius=12, fill=DARK_CARD)
         
-        # Hora con fuente de 40px centrada verticalmente (y=18 aprox)
+        # Estado ON/OFF a la izquierda
+        col_st = AMBER if enabled else DIM_WHITE
+        draw.text((35, 28), "ON" if enabled else "OFF", font=F.card_day, fill=col_st)
+        
+        # Hora con fuente de 40px
         time_str = f"{alarm.get('hour',7):02d}:{alarm.get('minute',0):02d}"
         _text_center_x(draw, 18, time_str, F.alarm_rect, WHITE, 0, W)
         
-        # Indicador de qué estamos editando (H o M)
+        # Indicador de edición
         if field == "hour":
             draw.line([W//2 - 45, H-15, W//2 - 5, H-15], fill=CYAN, width=3)
         elif field == "minute":
             draw.line([W//2 + 5, H-15, W//2 + 45, H-15], fill=CYAN, width=3)
+        elif field == "enabled":
+            draw.line([30, H-15, 60, H-15], fill=CYAN, width=3)
             
         return img
 
@@ -138,6 +146,9 @@ class RectUIScreen:
         return img
 
     def render_ringing(self, title, option) -> Image.Image:
-        img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
-        _text_center_x(draw, 32, "DETENER" if option==0 else "POSPONER", F.clock, WHITE, 0, W)
+        img = Image.new("RGB", (W, H), (150, 0, 0) if int(time.time()*2)%2==0 else BG)
+        draw = ImageDraw.Draw(img)
+        # Usamos 40px para que "DETENER" o "POSPONER" quepan perfectamente
+        txt = "DETENER" if option==0 else "POSPONER"
+        _text_center_x(draw, 18, txt, F.alarm_rect, WHITE, 0, W)
         return img

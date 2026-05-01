@@ -47,6 +47,7 @@ class _Fonts:
         self.menu_label = _ttf("arialbd.ttf", 15)
         self.small = _ttf("arial.ttf", 12)
         self.alarm_rect = _ttf("arialbd.ttf", 40)  # Nueva fuente de 40px para la alarma rect
+        self.alarm_ringing = _ttf("arialbd.ttf", 45) # Nueva fuente de 45px para "ALARMA"
 
 F = _Fonts()
 

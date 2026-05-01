@@ -119,7 +119,14 @@ class RoundHomeScreen:
         return img
 
     def render_alarm_ringing(self) -> Image.Image:
-        img = Image.new("RGB", (W, H), (150, 0, 0) if int(time.time()*2)%2==0 else BG)
+        # Fondo rojo parpadeante
+        img = Image.new("RGB", (W, H), (200, 0, 0) if int(time.time()*2)%2==0 else BG)
         draw = ImageDraw.Draw(img)
-        _text_center(draw, CY-20, "ALARMA", F.clock, WHITE)
+        
+        # Texto "ALARMA" con la nueva fuente de 45px centrada
+        _text_center(draw, CY - 25, "ALARMA", F.alarm_ringing, WHITE)
+        
+        # Instrucción pequeña abajo
+        _text_center(draw, CY + 30, "PULSA PARA DETENER", F.small, WHITE)
+        
         return img
