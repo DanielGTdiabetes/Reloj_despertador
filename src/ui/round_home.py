@@ -1,14 +1,14 @@
-"""
-round_home.py — Pantalla redonda premium.
-CAMBIOS respecto a la versión anterior:
-  - _draw_solar_arc(): arco con progreso solar + punto sol + colores por período
-  - render(): iconos meteorológicos PIL de alta calidad, temp min/max, badge campana
+﻿"""
+round_home.py ÔÇö Pantalla redonda premium.
+CAMBIOS respecto a la versi├│n anterior:
+  - _draw_solar_arc(): arco con progreso solar + punto sol + colores por per├¡odo
+  - render(): iconos meteorol├│gicos PIL de alta calidad, temp min/max, badge campana
   - render_night(): pantalla de noche con luna por fases, estrellas, badge alarma
   - render_focus(): compatible con icono 'location' (pin de mapa)
-  - get_period(): función auxiliar que espeja la lógica de SunService
+  - get_period(): funci├│n auxiliar que espeja la l├│gica de SunService
 
-Compatible 100% con app.py — no cambia ninguna firma de método existente.
-Solo se añade render_night() que app.py llama cuando period == 'night'.
+Compatible 100% con app.py ÔÇö no cambia ninguna firma de m├®todo existente.
+Solo se a├▒ade render_night() que app.py llama cuando period == 'night'.
 """
 from __future__ import annotations
 import math
@@ -22,20 +22,20 @@ from .theme import (
 )
 from .weather_icons import draw_weather_icon, draw_moon
 
-# ── Dimensiones ───────────────────────────────────────────────────────────────
+# ÔöÇÔöÇ Dimensiones ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 W = H = 240
 CX = CY = 120
 ARC_R     = 114
 ARC_THICK = 5
 
-# ── Colores adicionales ───────────────────────────────────────────────────────
+# ÔöÇÔöÇ Colores adicionales ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 AMBER    = (255, 180,  60)
 DIM_CYAN = ( 60, 110, 140)
 SUN_DOT  = (255, 200,  60)
 MOON_TXT = (220, 210, 170)
 RED_DIM  = (200,  80,  80)
 
-# Paleta de arco según período del día
+# Paleta de arco seg├║n per├¡odo del d├¡a
 _ARC_PALETTE = {
     "day":     {"a": CYAN,              "b": PURPLE,            "dot": SUN_DOT},
     "dawn":    {"a": (255, 160,  80),   "b": (180, 100, 220),   "dot": (255, 200, 100)},
@@ -43,7 +43,7 @@ _ARC_PALETTE = {
     "night":   {"a": ( 80,  80, 160),   "b": ( 50,  50, 120),   "dot": (100, 100, 200)},
 }
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ÔöÇÔöÇ Helpers ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 def _text_center(draw: ImageDraw.Draw, y: int, text: str, font, fill: tuple) -> None:
     bb = draw.textbbox((0, 0), text, font=font)
@@ -56,7 +56,7 @@ def _text_right(draw: ImageDraw.Draw, y: int, x_right: int,
     draw.text((x_right - (bb[2]-bb[0]), y), text, font=font, fill=fill)
 
 def _draw_stars(img: Image.Image, count: int = 45) -> None:
-    """Estrellas con posición fija (seed=42)."""
+    """Estrellas con posici├│n fija (seed=42)."""
     draw = ImageDraw.Draw(img)
     rng  = random.Random(42)
     for _ in range(count):
@@ -70,7 +70,7 @@ def _draw_stars(img: Image.Image, count: int = 45) -> None:
         draw.ellipse([x, y, x+size, y+size],
                      fill=(alpha, alpha, min(255, alpha+30)))
 
-# ── Arco solar ────────────────────────────────────────────────────────────────
+# ÔöÇÔöÇ Arco solar ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 def _draw_solar_arc(draw: ImageDraw.Draw, period: str, progress: float,
                     sunrise_dt=None, sunset_dt=None) -> None:
@@ -100,7 +100,7 @@ def _draw_solar_arc(draw: ImageDraw.Draw, period: str, progress: float,
     elif not isday:
         draw.arc(box, start=-90, end=90, fill=pal["a"], width=ARC_THICK)
 
-# ── Badge de alarma ───────────────────────────────────────────────────────────
+# ÔöÇÔöÇ Badge de alarma ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 _DAY_LABELS = ["L","M","X","J","V","S","D"]
 
@@ -115,7 +115,7 @@ def _days_label(days: list) -> str:
 
 def _draw_alarm_badge(draw: ImageDraw.Draw, alarm: dict, y: int,
                       badge_color: tuple = None) -> None:
-    """Dibuja badge de alarma con campana + hora + días."""
+    """Dibuja badge de alarma con campana + hora + d├¡as."""
     col = badge_color or (AMBER if alarm.get("enabled") else (50, 55, 75))
     if not alarm.get("enabled"):
         _text_center(draw, y, "ALARMA OFF", F.weather_sub, (55, 60, 80))
@@ -138,22 +138,22 @@ def _draw_alarm_badge(draw: ImageDraw.Draw, alarm: dict, y: int,
         draw.text((tx + bb[2]-bb[0] + 4, y+1), days, font=F.weather_sub,
                   fill=(*col[:3],) if len(col) == 3 else col)
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
 #  CLASE PRINCIPAL
-# ══════════════════════════════════════════════════════════════════════════════
+# ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
 
 class RoundHomeScreen:
 
     def __init__(self) -> None:
         pass
 
-    # ── Pantalla de día ───────────────────────────────────────────────────────
+    # ÔöÇÔöÇ Pantalla de d├¡a ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
     def render(self, now, weather: dict, sun_info: dict,
                moon: dict, alarm: dict, status: str) -> Image.Image:
         """
-        Pantalla principal de día/amanecer/atardecer.
-        Muestra: arco solar, fecha, hora, temp min/max, icono clima, descripción,
+        Pantalla principal de d├¡a/amanecer/atardecer.
+        Muestra: arco solar, fecha, hora, temp min/max, icono clima, descripci├│n,
                  temperatura actual, badge alarma.
         """
         img  = Image.new("RGB", (W, H), BG)
@@ -188,11 +188,11 @@ class RoundHomeScreen:
             minmax = f"\u2193{temp_min:.0f}\u00b0  \u2191{temp_max:.0f}\u00b0"
             _text_center(draw, 100, minmax, F.weather_sub, DIM_WHITE)
 
-        # Icono meteorológico PIL
+        # Icono meteorol├│gico PIL
         desc = (weather.get("description") or "").upper()
         draw_weather_icon(img, desc, CX, 128, size=50)
 
-        # Descripción (truncada)
+        # Descripci├│n (truncada)
         if desc:
             _text_center(draw, 158, desc[:20], F.weather_sub, DIM_WHITE)
 
@@ -206,7 +206,7 @@ class RoundHomeScreen:
 
         return img
 
-    # ── Pantalla de noche (luna) ──────────────────────────────────────────────
+    # ÔöÇÔöÇ Pantalla de noche (luna) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
     def render_night(self, now, moon: dict, alarm: dict,
                      sun_info: dict = None) -> Image.Image:
@@ -242,7 +242,7 @@ class RoundHomeScreen:
         date_str = f"{days_es[now.weekday()]} {now.day:02d}"
         _text_center(draw, 24, date_str, F.date_top, (80, 80, 165))
 
-        # Hora con efecto pulso (varía con el segundo)
+        # Hora con efecto pulso (var├¡a con el segundo)
         t_str = now.strftime("%H:%M")
         pulse = (math.sin(time.time() * 0.7) + 1) / 2
         pulse_col = tuple(int(WHITE[i] * (0.72 + 0.28 * pulse)) for i in range(3))
@@ -258,7 +258,7 @@ class RoundHomeScreen:
         draw_moon(img, CX, CY + 18, r=32, phase_frac=moon_frac,
                   phase_name=phase_name)
 
-        # Iluminación
+        # Iluminaci├│n
         illumination = moon.get("illumination", 0)
         _text_center(draw, 188, f"{illumination:.0f}% ilum.", F.weather_sub,
                      (110, 110, 155))
@@ -269,12 +269,12 @@ class RoundHomeScreen:
 
         return img
 
-    # ── Menú (focus) ─────────────────────────────────────────────────────────
+    # ÔöÇÔöÇ Men├║ (focus) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
     def render_focus(self, title: str, subtitle: str,
                      kind: str = "", value=None) -> Image.Image:
         """
-        Pantalla de foco para estados de menú.
+        Pantalla de foco para estados de men├║.
         kind puede ser: alarm, wifi, sync, weather, location, brightness.
         """
         img  = Image.new("RGB", (W, H), BG)
@@ -290,7 +290,7 @@ class RoundHomeScreen:
         _text_center(draw, H-48, subtitle, F.weather_sub, DIM_WHITE)
         return img
 
-    # ── Alarma sonando ────────────────────────────────────────────────────────
+    # ÔöÇÔöÇ Alarma sonando ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
     def render_alarm_ringing(self) -> Image.Image:
         img  = Image.new("RGB", (W, H), BG)
