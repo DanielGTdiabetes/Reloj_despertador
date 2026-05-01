@@ -35,13 +35,13 @@ class State:
 
 
 MENU_ITEMS = [
-    ("toggle_alarm", "Estado Alarma"),
-    ("alarm", "Ajustar Hora"),
-    ("brightness", "Brillo"),
-    ("wifi", "WiFi"),
-    ("location", "Ubicacion"),
-    ("sync", "Sincronizar"),
-    ("weather", "Act. Clima"),
+    ("toggle_alarm", "ALARMA ON/OFF"),
+    ("alarm", "HORA ALARMA"),
+    ("brightness", "BRILLO"),
+    ("wifi", "WIFI"),
+    ("location", "CIUDAD"),
+    ("sync", "SYNC HORA"),
+    ("weather", "ACT. CLIMA"),
 ]
 
 PASSWORD_GROUPS = ["OK", "<", "abcABC", "defDEF", "ghiGHI", "jklJKL", "mnoMNO", "pqrsPQRS", "tuvTUV", "wxyzWXYZ", "0123456789", "@#-_ ."]

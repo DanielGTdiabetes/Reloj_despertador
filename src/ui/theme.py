@@ -44,7 +44,7 @@ class _Fonts:
         self.temp_big = _ttf("arialbd.ttf", 26)    
         self.card_day = _ttf("arialbd.ttf", 13)
         self.card_temp = _ttf("arial.ttf", 11)
-        self.menu_label = _ttf("arialbd.ttf", 15)
+        self.menu_label = _ttf("arialbd.ttf", 12)  # Bajado a 12px para que quepa en los recuadros
         self.small = _ttf("arial.ttf", 12)
         self.alarm_rect = _ttf("arialbd.ttf", 40)  # Nueva fuente de 40px para la alarma rect
         self.alarm_ringing = _ttf("arialbd.ttf", 45) # Nueva fuente de 45px para "ALARMA"
