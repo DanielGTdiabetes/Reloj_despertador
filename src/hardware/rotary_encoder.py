@@ -72,9 +72,10 @@ class RotaryEncoder:
             sw = GPIO.input(self.sw_pin)
             now = time.time()
 
-            if clk != last_clk and clk == GPIO.LOW and now - last_rotate > 0.025:
+            if clk != last_clk and clk == GPIO.LOW and now - last_rotate > 0.015:
                 last_rotate = now
-                if dt != clk:
+                # Invertimos la lógica: si DT es igual a CLK, ahora es CW
+                if dt == clk:
                     self._position += 1
                     self._emit("rotate_cw", self._position)
                 else:

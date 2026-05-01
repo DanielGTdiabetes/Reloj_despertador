@@ -19,6 +19,13 @@ class I2SAudio:
 
     def set_volume(self, percent):
         self._volume = max(0, min(100, percent))
+        try:
+            # Comando amixer para el amplificador I2S
+            # Usamos 'Digital' o 'PCM' según el driver de la Pi
+            cmd = ["amixer", "-q", "set", "PCM", f"{self._volume}%"]
+            subprocess.run(cmd, check=False)
+        except Exception as e:
+            print(f"[Audio] Error setting volume: {e}")
 
     def play_file(self, filepath, loop=False):
         if not os.path.exists(filepath):
