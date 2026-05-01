@@ -7,6 +7,11 @@ Ambas pantallas usan SPI0:
 - GC9A01 redonda en CE0, GPIO8.
 - ST7789P3 rectangular en CE1, GPIO7.
 
+> [!IMPORTANT]
+> **CONFIGURACIÓN CRÍTICA DEL BUS:** 
+> La pantalla redonda DEBE usar `spi_device: 0` y la rectangular DEBE usar `spi_device: 1`. 
+> Intentar poner ambas en `device: 0` (incluso con CS manual) causa interferencias en el bus SPI0 que dejan la pantalla rectangular en blanco.
+
 Esto deja libres los GPIO18, GPIO19 y GPIO21 para el audio I2S MAX98357A.
 
 ## GC9A01 - Pantalla Redonda 240x240
