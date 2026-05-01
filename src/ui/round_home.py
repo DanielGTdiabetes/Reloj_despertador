@@ -100,9 +100,22 @@ class RoundHomeScreen:
     def render_focus(self, title, subtitle, kind="", value=None) -> Image.Image:
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
-        draw_menu_icon(draw, CX-30, CY-70, 60, kind)
-        _text_center(draw, CY+10, title.upper(), F.date_top, WHITE)
-        if value: _text_center(draw, CY+40, str(value), F.clock, CYAN)
+        
+        # Icono un poco más pequeño y centrado
+        icon_size = 50
+        draw_menu_icon(draw, CX - icon_size//2, CY - 80, icon_size, kind)
+        
+        # Título en tamaño mediano
+        _text_center(draw, CY - 10, title.upper(), F.date_top, WHITE)
+        
+        # Valor en tamaño intermedio (temp_big = 26px), no el gigante del reloj
+        if value:
+            _text_center(draw, CY + 25, str(value).upper(), F.temp_big, CYAN)
+            
+        # Subtítulo pequeño abajo
+        if subtitle:
+            _text_center(draw, CY + 60, subtitle, F.small, DIM_WHITE)
+            
         return img
 
     def render_alarm_ringing(self) -> Image.Image:

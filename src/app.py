@@ -35,13 +35,13 @@ class State:
 
 
 MENU_ITEMS = [
-    ("toggle_alarm", "Activar/Desactivar"),
-    ("alarm", "Programar Hora"),
+    ("toggle_alarm", "Estado Alarma"),
+    ("alarm", "Ajustar Hora"),
     ("brightness", "Brillo"),
     ("wifi", "WiFi"),
     ("location", "Ubicacion"),
-    ("sync", "Sincronizar hora"),
-    ("weather", "Actualizar clima"),
+    ("sync", "Sincronizar"),
+    ("weather", "Act. Clima"),
 ]
 
 PASSWORD_GROUPS = ["OK", "<", "abcABC", "defDEF", "ghiGHI", "jklJKL", "mnoMNO", "pqrsPQRS", "tuvTUV", "wxyzWXYZ", "0123456789", "@#-_ ."]
@@ -550,11 +550,14 @@ class AlarmClockApp:
 
         if self.state == State.MENU:
             key, label = MENU_ITEMS[self.menu_index]
-            return self.ui_round.render_focus(label, "Gira y pulsa", kind=key)
+            val = ""
+            if key == "toggle_alarm":
+                val = "ACTIVA" if self.alarm.get("enabled") else "OFF"
+            return self.ui_round.render_focus(label, "Gira y pulsa", kind=key, value=val)
 
         if self.state == State.ALARM:
             value = f"{self.alarm.get('hour', 7):02d}:{self.alarm.get('minute', 0):02d}"
-            sub   = "Activa" if self.alarm.get("enabled") else "Desactivada"
+            sub   = "ON" if self.alarm.get("enabled") else "OFF"
             return self.ui_round.render_focus("Alarma", sub, "alarm", value)
 
         if self.state == State.BRIGHTNESS:
