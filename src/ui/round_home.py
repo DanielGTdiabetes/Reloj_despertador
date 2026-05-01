@@ -1,302 +1,209 @@
-﻿"""
-round_home.py ÔÇö Pantalla redonda premium.
-CAMBIOS respecto a la versi├│n anterior:
-  - _draw_solar_arc(): arco con progreso solar + punto sol + colores por per├¡odo
-  - render(): iconos meteorol├│gicos PIL de alta calidad, temp min/max, badge campana
-  - render_night(): pantalla de noche con luna por fases, estrellas, badge alarma
-  - render_focus(): compatible con icono 'location' (pin de mapa)
-  - get_period(): funci├│n auxiliar que espeja la l├│gica de SunService
-
-Compatible 100% con app.py ÔÇö no cambia ninguna firma de m├®todo existente.
-Solo se a├▒ade render_night() que app.py llama cuando period == 'night'.
-"""
-from __future__ import annotations
+import datetime as dt
 import math
-import time
-import random
-from typing import Optional
+import os
+
 from PIL import Image, ImageDraw
-from .theme import (
-    F, CYAN, PURPLE, BG, WHITE, DIM_WHITE, ICONS,
-    condition_to_icon_file, draw_menu_icon
+
+from graphics.icons import (
+    apply_round_mask,
+    center_text,
+    condition_kind,
+    fit_text,
+    gradient,
+    load_font,
+    text_size,
 )
-from .weather_icons import draw_weather_icon, draw_moon
 
-# ÔöÇÔöÇ Dimensiones ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
-W = H = 240
-CX = CY = 120
-ARC_R     = 114
-ARC_THICK = 5
-
-# ÔöÇÔöÇ Colores adicionales ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
-AMBER    = (255, 180,  60)
-DIM_CYAN = ( 60, 110, 140)
-SUN_DOT  = (255, 200,  60)
-MOON_TXT = (220, 210, 170)
-RED_DIM  = (200,  80,  80)
-
-# Paleta de arco seg├║n per├¡odo del d├¡a
-_ARC_PALETTE = {
-    "day":     {"a": CYAN,              "b": PURPLE,            "dot": SUN_DOT},
-    "dawn":    {"a": (255, 160,  80),   "b": (180, 100, 220),   "dot": (255, 200, 100)},
-    "dusk":    {"a": (255, 100,  60),   "b": (200,  80, 180),   "dot": (255, 140,  80)},
-    "night":   {"a": ( 80,  80, 160),   "b": ( 50,  50, 120),   "dot": (100, 100, 200)},
-}
-
-# ÔöÇÔöÇ Helpers ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
-
-def _text_center(draw: ImageDraw.Draw, y: int, text: str, font, fill: tuple) -> None:
-    bb = draw.textbbox((0, 0), text, font=font)
-    w  = bb[2] - bb[0]
-    draw.text(((W - w) // 2, y), text, font=font, fill=fill)
-
-def _text_right(draw: ImageDraw.Draw, y: int, x_right: int,
-                text: str, font, fill: tuple) -> None:
-    bb = draw.textbbox((0, 0), text, font=font)
-    draw.text((x_right - (bb[2]-bb[0]), y), text, font=font, fill=fill)
-
-def _draw_stars(img: Image.Image, count: int = 45) -> None:
-    """Estrellas con posici├│n fija (seed=42)."""
-    draw = ImageDraw.Draw(img)
-    rng  = random.Random(42)
-    for _ in range(count):
-        while True:
-            x = rng.randint(10, W - 10)
-            y = rng.randint(10, H - 10)
-            if (x - CX)**2 + (y - CY)**2 < (ARC_R - 8)**2:
-                break
-        alpha = rng.randint(40, 180)
-        size  = rng.randint(1, 2)
-        draw.ellipse([x, y, x+size, y+size],
-                     fill=(alpha, alpha, min(255, alpha+30)))
-
-# ÔöÇÔöÇ Arco solar ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
-
-def _draw_solar_arc(draw: ImageDraw.Draw, period: str, progress: float,
-                    sunrise_dt=None, sunset_dt=None) -> None:
-    """
-    Dibuja el arco exterior de la pantalla redonda con progreso solar.
-    progress: 0.0=amanecer, 1.0=atardecer, -1=noche/fuera de rango.
-    """
-    pal = _ARC_PALETTE.get(period, _ARC_PALETTE["day"])
-    box = [CX - ARC_R, CY - ARC_R, CX + ARC_R, CY + ARC_R]
-
-    # Track base
-    draw.arc(box, start=-90, end=270, fill=(20, 25, 45), width=ARC_THICK + 2)
-    # Arco B (lado izquierdo fijo)
-    draw.arc(box, start=90,  end=270, fill=pal["b"],     width=ARC_THICK)
-
-    # Arco A (progreso solar, lado derecho)
-    isday = 0.0 <= progress <= 1.0
-    if isday and progress > 0.01:
-        end_angle = -90 + int(180 * progress)
-        draw.arc(box, start=-90, end=end_angle, fill=pal["a"], width=ARC_THICK)
-        # Punto sol
-        angle_rad = math.radians(-90 + 180 * progress)
-        sx = int(CX + ARC_R * math.cos(angle_rad))
-        sy = int(CY + ARC_R * math.sin(angle_rad))
-        r_dot = ARC_THICK + 2
-        draw.ellipse([sx-r_dot, sy-r_dot, sx+r_dot, sy+r_dot], fill=pal["dot"])
-    elif not isday:
-        draw.arc(box, start=-90, end=90, fill=pal["a"], width=ARC_THICK)
-
-# ÔöÇÔöÇ Badge de alarma ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
-
-_DAY_LABELS = ["L","M","X","J","V","S","D"]
-
-def _days_label(days: list) -> str:
-    if not days: return ""
-    s = sorted(days)
-    if len(s) == 7:   return "TODOS"
-    if s == [0,1,2,3,4]: return "L-V"
-    if s == [5,6]:    return "S-D"
-    if len(s) <= 3:   return " ".join(_DAY_LABELS[d] for d in s)
-    return f"{len(s)}d"
-
-def _draw_alarm_badge(draw: ImageDraw.Draw, alarm: dict, y: int,
-                      badge_color: tuple = None) -> None:
-    """Dibuja badge de alarma con campana + hora + d├¡as."""
-    col = badge_color or (AMBER if alarm.get("enabled") else (50, 55, 75))
-    if not alarm.get("enabled"):
-        _text_center(draw, y, "ALARMA OFF", F.weather_sub, (55, 60, 80))
-        return
-    h_str = f"{alarm.get('hour', 7):02d}:{alarm.get('minute', 0):02d}"
-    days  = _days_label(alarm.get("days", list(range(7))))
-
-    # Campana PIL (simple, clara y reconocible)
-    bx, by = CX - 38, y
-    bs = 11
-    draw.chord([bx, by, bx+bs, by+bs-2], 180, 0, fill=col)
-    draw.rectangle([bx-1, by+bs-4, bx+bs+1, by+bs-1], fill=col)
-    draw.ellipse([bx+bs//2-2, by+bs-2, bx+bs//2+2, by+bs+3], fill=WHITE)
-
-    # Texto hora
-    tx = bx + bs + 5
-    draw.text((tx, y), h_str, font=F.weather_sub, fill=col)
-    if days:
-        bb = draw.textbbox((0, 0), h_str, font=F.weather_sub)
-        draw.text((tx + bb[2]-bb[0] + 4, y+1), days, font=F.weather_sub,
-                  fill=(*col[:3],) if len(col) == 3 else col)
-
-# ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
-#  CLASE PRINCIPAL
-# ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
 
 class RoundHomeScreen:
+    WIDTH = 240
+    HEIGHT = 240
+    ICON_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets", "weather"))
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, scale=2):
+        self.scale = scale
+        self.rw = self.WIDTH * scale
+        self.rh = self.HEIGHT * scale
+        self.font_time = load_font(72 * scale)
+        self.font_date = load_font(15 * scale)
+        self.font_small = load_font(12 * scale, bold=False)
+        self.font_medium = load_font(15 * scale)
+        self.font_temp = load_font(24 * scale)
+        self._icons = {}
 
-    # ÔöÇÔöÇ Pantalla de d├¡a ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
-
-    def render(self, now, weather: dict, sun_info: dict,
-               moon: dict, alarm: dict, status: str) -> Image.Image:
-        """
-        Pantalla principal de d├¡a/amanecer/atardecer.
-        Muestra: arco solar, fecha, hora, temp min/max, icono clima, descripci├│n,
-                 temperatura actual, badge alarma.
-        """
-        img  = Image.new("RGB", (W, H), BG)
+    def render(self, now, current, sun, moon, alarm=None, status=""):
+        img = self._background(sun.get("period", "day"))
         draw = ImageDraw.Draw(img)
+        s = self.scale
+        cx, cy = self.rw // 2, self.rh // 2
 
-        period   = sun_info.get("period", "day")
-        progress = sun_info.get("progress", 0.5)
-        sunrise  = sun_info.get("sunrise")
-        sunset   = sun_info.get("sunset")
-        pal      = _ARC_PALETTE.get(period, _ARC_PALETTE["day"])
+        self._draw_second_ring(draw, cx, cy, int(112 * s), now.second)
 
-        # Arco solar
-        _draw_solar_arc(draw, period, progress, sunrise, sunset)
+        condition = current.get("description") or current.get("main") or "despejado"
+        temp = current.get("temp")
+        is_night = sun.get("period") == "night"
 
-        # Fecha corta
-        days_es  = ["LUN","MAR","MIE","JUE","VIE","SAB","DOM"]
-        date_str = f"{days_es[now.weekday()]} {now.day:02d}"
-        _text_center(draw, 26, date_str, F.date_top, pal["a"])
+        if is_night and not condition:
+            self._draw_moon(draw, cx, int(50 * s), int(26 * s), moon.get("phase", 0.5))
+        else:
+            self._paste_weather_icon(img, cx, int(53 * s), int(82 * s), condition)
 
-        # Hora
-        t_str = now.strftime("%H:%M")
-        bb    = draw.textbbox((0, 0), t_str, font=F.clock)
-        draw.text(((W-(bb[2]-bb[0]))//2, 48), t_str, font=F.clock, fill=WHITE)
+        day = self._day_name(now.weekday()).upper()
+        date_text = f"{day} {now.day:02d}/{now.month:02d}"
+        center_text(draw, (cx, int(24 * s)), date_text, self.font_date, (180, 226, 255))
 
-        # Temp min/max
-        temp_max = weather.get("temp_max")
-        temp_min = weather.get("temp_min")
-        # Intentar obtener de forecast si no viene en current
-        if temp_max is None:
-            temp_max = weather.get("temp")
-        if temp_max is not None and temp_min is not None:
-            minmax = f"\u2193{temp_min:.0f}\u00b0  \u2191{temp_max:.0f}\u00b0"
-            _text_center(draw, 100, minmax, F.weather_sub, DIM_WHITE)
+        time_text = now.strftime("%H:%M")
+        center_text(draw, (cx, int(121 * s)), time_text, self.font_time, (255, 255, 255))
 
-        # Icono meteorol├│gico PIL
-        desc = (weather.get("description") or "").upper()
-        draw_weather_icon(img, desc, CX, 128, size=50)
+        temp_text = "--C" if temp is None else f"{round(float(temp))}C"
+        center_text(draw, (cx, int(169 * s)), temp_text, self.font_temp, (255, 232, 126))
 
-        # Descripci├│n (truncada)
-        if desc:
-            _text_center(draw, 158, desc[:20], F.weather_sub, DIM_WHITE)
+        desc = self._clean_condition(condition).upper()
+        desc_font = fit_text(draw, desc, int(160 * s), 15 * s, 8 * s)
+        center_text(draw, (cx, int(193 * s)), desc, desc_font, (214, 235, 255))
 
-        # Temperatura actual
-        temp = weather.get("temp")
-        temp_str = f"{temp:.1f}\u00b0C" if temp is not None else "--\u00b0C"
-        _text_center(draw, 172, temp_str, F.temp_big, pal["a"])
+        humidity = current.get("humidity")
+        wind = current.get("wind_speed")
+        details = []
+        if humidity is not None:
+            details.append(f"H {int(humidity)}%")
+        if wind is not None:
+            details.append(f"V {round(float(wind) * 3.6)}km/h")
+        if not details and status:
+            details.append(status)
+        center_text(draw, (cx, int(212 * s)), "  ".join(details[:2]), self.font_small, (146, 194, 230))
 
-        # Badge alarma
-        _draw_alarm_badge(draw, alarm, 196)
+        sunrise = self._format_time(sun.get("sunrise"))
+        sunset = self._format_time(sun.get("sunset"))
+        self._draw_sun_band(draw, sun, sunrise, sunset)
 
-        return img
+        if alarm and alarm.get("enabled"):
+            center_text(draw, (cx, int(228 * s)), f"ALARMA {alarm['hour']:02d}:{alarm['minute']:02d}",
+                        self.font_small, (255, 176, 120))
 
-    # ÔöÇÔöÇ Pantalla de noche (luna) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+        small = img.resize((self.WIDTH, self.HEIGHT), Image.LANCZOS)
+        return apply_round_mask(small)
 
-    def render_night(self, now, moon: dict, alarm: dict,
-                     sun_info: dict = None) -> Image.Image:
-        """
-        Pantalla de noche: fondo estrellado, arco nocturno, hora, fase lunar,
-        nombre de fase, badge alarma.
-
-        Args:
-            now:      datetime actual (timezone-aware).
-            moon:     dict con 'phase' (0.0-1.0), 'phase_name', 'illumination'.
-            alarm:    dict con 'enabled', 'hour', 'minute', 'days'.
-            sun_info: opcional, para arco correcto.
-        """
-        img  = Image.new("RGB", (W, H), BG)
+    def render_focus(self, title, subtitle, kind="menu", value=""):
+        img = self._background("day")
         draw = ImageDraw.Draw(img)
+        s = self.scale
+        cx, cy = self.rw // 2, self.rh // 2
+        draw.ellipse((int(26 * s), int(26 * s), int(214 * s), int(214 * s)),
+                     outline=(80, 185, 255), width=int(5 * s))
+        if kind == "wifi":
+            self._draw_wifi(draw, cx, int(78 * s), int(44 * s))
+        elif kind == "alarm":
+            self._draw_alarm(draw, cx, int(78 * s), int(40 * s))
+        elif kind == "brightness":
+            self._draw_brightness(draw, cx, int(78 * s), int(40 * s))
+        else:
+            self._paste_weather_icon(img, cx, int(78 * s), int(78 * s), "partly")
 
-        # Fondo nocturno con vignette
-        for dr in range(118, 0, -4):
-            t   = 1 - dr / 118
-            col = (int(5+t*10), int(10+t*12), int(25+t*18))
-            draw.ellipse([CX-dr, CY-dr, CX+dr, CY+dr], fill=col)
-
-        # Estrellas
-        _draw_stars(img)
-
-        # Arco nocturno
-        sun_info = sun_info or {}
-        _draw_solar_arc(draw, "night", -1,
-                        sun_info.get("sunrise"), sun_info.get("sunset"))
-
-        # Fecha
-        days_es  = ["LUN","MAR","MIE","JUE","VIE","SAB","DOM"]
-        date_str = f"{days_es[now.weekday()]} {now.day:02d}"
-        _text_center(draw, 24, date_str, F.date_top, (80, 80, 165))
-
-        # Hora con efecto pulso (var├¡a con el segundo)
-        t_str = now.strftime("%H:%M")
-        pulse = (math.sin(time.time() * 0.7) + 1) / 2
-        pulse_col = tuple(int(WHITE[i] * (0.72 + 0.28 * pulse)) for i in range(3))
-        bb = draw.textbbox((0, 0), t_str, font=F.clock)
-        draw.text(((W-(bb[2]-bb[0]))//2, 46), t_str, font=F.clock, fill=pulse_col)
-
-        # Nombre de fase
-        phase_name = (moon.get("phase_name") or "").upper()
-        _text_center(draw, 110, phase_name, F.weather_sub, MOON_TXT)
-
-        # Luna PIL
-        moon_frac = moon.get("phase", 0.5)
-        draw_moon(img, CX, CY + 18, r=32, phase_frac=moon_frac,
-                  phase_name=phase_name)
-
-        # Iluminaci├│n
-        illumination = moon.get("illumination", 0)
-        _text_center(draw, 188, f"{illumination:.0f}% ilum.", F.weather_sub,
-                     (110, 110, 155))
-
-        # Badge alarma
-        _draw_alarm_badge(draw, alarm, 204,
-                          badge_color=AMBER if alarm.get("enabled") else None)
-
-        return img
-
-    # ÔöÇÔöÇ Men├║ (focus) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
-
-    def render_focus(self, title: str, subtitle: str,
-                     kind: str = "", value=None) -> Image.Image:
-        """
-        Pantalla de foco para estados de men├║.
-        kind puede ser: alarm, wifi, sync, weather, location, brightness.
-        """
-        img  = Image.new("RGB", (W, H), BG)
-        draw = ImageDraw.Draw(img)
-        draw.ellipse([5, 5, W-5, H-5], outline=PURPLE, width=3)
-
-        # Icono central
-        draw_menu_icon(draw, CX-30, CY-60, 60, kind)
-
-        _text_center(draw, CY+10,  title.upper(), F.date_top, WHITE)
+        title_font = fit_text(draw, title.upper(), int(180 * s), 25 * s, 12 * s)
+        center_text(draw, (cx, int(134 * s)), title.upper(), title_font, (255, 255, 255))
+        sub_font = fit_text(draw, subtitle, int(170 * s), 15 * s, 9 * s, bold=False)
+        center_text(draw, (cx, int(161 * s)), subtitle, sub_font, (170, 210, 245))
         if value:
-            _text_center(draw, CY+35, str(value), F.temp_big, CYAN)
-        _text_center(draw, H-48, subtitle, F.weather_sub, DIM_WHITE)
-        return img
+            value_font = fit_text(draw, value, int(150 * s), 22 * s, 10 * s)
+            center_text(draw, (cx, int(193 * s)), value, value_font, (255, 228, 120))
+        return apply_round_mask(img.resize((self.WIDTH, self.HEIGHT), Image.LANCZOS))
 
-    # ÔöÇÔöÇ Alarma sonando ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+    def _background(self, period):
+        if period == "night":
+            top, bottom = (5, 9, 26), (21, 18, 58)
+        elif period in ("sunrise", "sunset"):
+            top, bottom = (30, 25, 70), (235, 108, 54)
+        else:
+            top, bottom = (8, 55, 112), (7, 18, 44)
+        return gradient((self.rw, self.rh), top, bottom)
 
-    def render_alarm_ringing(self) -> Image.Image:
-        img  = Image.new("RGB", (W, H), BG)
-        draw = ImageDraw.Draw(img)
-        col  = CYAN if int(time.time() * 4) % 2 == 0 else AMBER
-        draw.ellipse([10, 10, W-10, H-10], outline=col, width=10)
-        _text_center(draw, CY-50, "\u23f0", F.clock, col)   # emoji reloj
-        _text_center(draw, CY+10, "ALARMA", F.clock, WHITE)
-        return img
+    def _draw_second_ring(self, draw, cx, cy, radius, second):
+        s = self.scale
+        box = (cx - radius, cy - radius, cx + radius, cy + radius)
+        draw.arc(box, 0, 360, fill=(42, 68, 105), width=int(4 * s))
+        end = 270 + int(second / 60 * 360)
+        draw.arc(box, 270, end, fill=(0, 230, 255), width=int(6 * s))
+        for i in range(12):
+            a = math.radians(i * 30 - 90)
+            r1, r2 = radius - int(7 * s), radius - int(1 * s)
+            draw.line((cx + math.cos(a) * r1, cy + math.sin(a) * r1,
+                       cx + math.cos(a) * r2, cy + math.sin(a) * r2),
+                      fill=(130, 185, 220), width=max(1, int(1.5 * s)))
+
+    def _draw_sun_band(self, draw, sun, sunrise="", sunset=""):
+        s = self.scale
+        x1, x2 = int(52 * s), int(188 * s)
+        y = int(224 * s)
+        draw.line((x1, y, x2, y), fill=(57, 92, 132), width=int(2 * s))
+        p = max(0.0, min(1.0, sun.get("progress", 0.0)))
+        draw.line((x1, y, x1 + int((x2 - x1) * p), y), fill=(255, 192, 82), width=int(3 * s))
+        sun_x = x1 + int((x2 - x1) * p)
+        draw.ellipse((sun_x - 3 * s, y - 3 * s, sun_x + 3 * s, y + 3 * s), fill=(255, 231, 90))
+        if sunrise and sunset:
+            draw.text((int(28 * s), int(218 * s)), sunrise, fill=(255, 196, 108), font=self.font_small, anchor="mm")
+            draw.text((int(212 * s), int(218 * s)), sunset, fill=(174, 202, 255), font=self.font_small, anchor="mm")
+
+    def _paste_weather_icon(self, img, cx, cy, size, condition):
+        icon = self._load_icon(condition_kind(condition))
+        if icon is None:
+            return
+        scaled = icon.resize((size, size), Image.LANCZOS)
+        img.paste(scaled, (int(cx - size / 2), int(cy - size / 2)), scaled)
+
+    def _load_icon(self, kind):
+        if kind in self._icons:
+            return self._icons[kind]
+        path = os.path.join(self.ICON_DIR, f"{kind}.png")
+        if not os.path.exists(path):
+            path = os.path.join(self.ICON_DIR, "partly.png")
+        try:
+            icon = Image.open(path).convert("RGBA")
+        except Exception:
+            icon = None
+        self._icons[kind] = icon
+        return icon
+
+    def _draw_moon(self, draw, cx, cy, radius, phase=0.55):
+        draw.ellipse((cx - radius, cy - radius, cx + radius, cy + radius), fill=(225, 230, 245))
+        offset = int(radius * (0.9 - abs(phase - 0.5)))
+        shadow = (18, 24, 52)
+        if phase < 0.5:
+            draw.ellipse((cx - radius + offset, cy - radius, cx + radius + offset, cy + radius), fill=shadow)
+        else:
+            draw.ellipse((cx - radius - offset, cy - radius, cx + radius - offset, cy + radius), fill=shadow)
+
+    def _draw_wifi(self, draw, cx, cy, size):
+        for i in range(3):
+            r = size - i * size // 4
+            draw.arc((cx - r, cy - r, cx + r, cy + r), 205, 335, fill=(70, 220, 255), width=max(3, size // 12))
+        draw.ellipse((cx - 6, cy + 20, cx + 6, cy + 32), fill=(70, 220, 255))
+
+    def _draw_alarm(self, draw, cx, cy, size):
+        draw.ellipse((cx - size, cy - size, cx + size, cy + size), outline=(255, 205, 90), width=max(3, size // 10))
+        draw.line((cx, cy, cx, cy - size // 2), fill=(255, 255, 255), width=max(2, size // 12))
+        draw.line((cx, cy, cx + size // 3, cy + size // 5), fill=(255, 255, 255), width=max(2, size // 12))
+        draw.arc((cx - size - 12, cy - size - 8, cx - 8, cy - size + 20), 180, 350, fill=(255, 120, 90), width=4)
+        draw.arc((cx + 8, cy - size - 8, cx + size + 12, cy - size + 20), 190, 360, fill=(255, 120, 90), width=4)
+
+    def _draw_brightness(self, draw, cx, cy, size):
+        for i in range(10):
+            a = math.radians(i * 36)
+            draw.line((cx + math.cos(a) * (size + 5), cy + math.sin(a) * (size + 5),
+                       cx + math.cos(a) * (size + 20), cy + math.sin(a) * (size + 20)),
+                      fill=(255, 220, 80), width=4)
+        draw.ellipse((cx - size, cy - size, cx + size, cy + size), fill=(255, 230, 80))
+
+    def _format_time(self, value):
+        if isinstance(value, dt.datetime):
+            return value.strftime("%H:%M")
+        return "--:--"
+
+    def _day_name(self, weekday):
+        return ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"][weekday]
+
+    def _clean_condition(self, condition):
+        text = (condition or "despejado").strip()
+        if len(text) > 16:
+            text = text[:15] + "."
+        return text
