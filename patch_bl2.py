@@ -1,8 +1,0 @@
-f=open("/home/dani/reloj_despertador/src/hardware/st7789_v2.py","r")
-c=f.read()
-f.close()
-c=c.replace("GPIO.HIGH if percent > 0 else GPIO.LOW","GPIO.LOW if percent > 0 else GPIO.HIGH")
-f=open("/home/dani/reloj_despertador/src/hardware/st7789_v2.py","w")
-f.write(c)
-f.close()
-print("REVERTED")
