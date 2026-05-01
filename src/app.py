@@ -291,7 +291,7 @@ class AlarmClockApp:
             self.alarm["enabled"] = not self.alarm.get("enabled", False)
             self._save_alarm()
             self.state = State.CLOCK
-        elif key == "alarm":
+        elif key == "alarm_clock":
             self.alarm_field = "enabled"
             self.state = State.ALARM
         elif key == "brightness":
