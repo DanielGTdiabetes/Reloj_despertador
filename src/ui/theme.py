@@ -1,19 +1,16 @@
 """
-theme.py — Configuración visual Ultra-Premium COMPLETA.
-Restaurada compatibilidad con rect_ui.py y mantenidas fuentes gigantes.
+theme.py — Tamaños equilibrados para Pi Zero.
 """
 from __future__ import annotations
 import os
 from PIL import Image, ImageFont
 
-# Rutas absolutas
 _BASE = os.path.dirname(os.path.abspath(__file__))
 _ASSETS = os.path.join(_BASE, "..", "assets")
 _FONTS = os.path.join(_ASSETS, "fonts")
 _ICONS = os.path.join(_ASSETS, "weather")
 _MENU_ICONS = os.path.join(_ASSETS, "menu_icons")
 
-# Colores Premium
 BG = (5, 10, 25)
 CYAN = (120, 225, 255)
 PURPLE = (190, 140, 255)
@@ -40,10 +37,10 @@ def _ttf(name: str, size: int) -> ImageFont.FreeTypeFont:
 
 class _Fonts:
     def __init__(self):
-        self.clock = _ttf("arialbd.ttf", 84)      # Reloj gigante
-        self.date_top = _ttf("arialbd.ttf", 22)   # Fecha
-        self.weather_sub = _ttf("arialbd.ttf", 14) # Secundarios
-        self.temp_big = _ttf("arialbd.ttf", 26)    # Temp grande
+        self.clock = _ttf("arialbd.ttf", 74)       # Reducido de 84 a 74 para que no solape
+        self.date_top = _ttf("arialbd.ttf", 20)    # Ajustado
+        self.weather_sub = _ttf("arialbd.ttf", 14) 
+        self.temp_big = _ttf("arialbd.ttf", 26)    
         self.card_day = _ttf("arialbd.ttf", 13)
         self.card_temp = _ttf("arial.ttf", 11)
         self.menu_label = _ttf("arialbd.ttf", 15)
