@@ -128,23 +128,22 @@ class _MenuIconCache:
 
 MENU_ICONS = _MenuIconCache()
 
-# ── Iconos de menú (dibujados con PIL como fallback) ─────────────────────────
+# ── Iconos de menú ──────────────────────────────────────────────────────────
 
 def draw_menu_icon(draw, x: int, y: int, size: int, kind: str) -> None:
     """
     Dibuja el icono del ítem de menú.
     Primero intenta cargar PNG de assets/menu_icons/{kind}.png.
-    Si no existe, dibuja con PIL como fallback.
-    kind: "alarm" | "wifi" | "sync" | "weather" | "location" | "brightness"
     """
-    # Intentar PNG de alta calidad
     icon_img = MENU_ICONS.get(kind, size)
     if icon_img is not None:
-        # Necesitamos la imagen base para hacer paste — se pasa via draw._image
         try:
-            base = draw._image
-            base.paste(icon_img, (x, y), icon_img)
-            return
+            # En Pillow, el objeto Draw suele tener la imagen en .im (buffer) o ._image
+            # Intentamos obtener la imagen de forma robusta
+            img = getattr(draw, "_image", None)
+            if img:
+                img.paste(icon_img, (x, y), icon_img)
+                return
         except Exception:
             pass
 
