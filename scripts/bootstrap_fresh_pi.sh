@@ -46,7 +46,6 @@ touch "$BOOT_CONFIG"
 sed -i 's/^[[:space:]]*dtparam=audio=on/# dtparam=audio=on/' "$BOOT_CONFIG"
 
 grep -q '^dtparam=spi=on' "$BOOT_CONFIG" || echo 'dtparam=spi=on' >> "$BOOT_CONFIG"
-grep -q '^dtoverlay=spi1-1cs' "$BOOT_CONFIG" || echo 'dtoverlay=spi1-1cs' >> "$BOOT_CONFIG"
 grep -q '^dtparam=i2s=on' "$BOOT_CONFIG" || echo 'dtparam=i2s=on' >> "$BOOT_CONFIG"
 grep -q '^dtoverlay=max98357a' "$BOOT_CONFIG" || echo 'dtoverlay=max98357a' >> "$BOOT_CONFIG"
 
