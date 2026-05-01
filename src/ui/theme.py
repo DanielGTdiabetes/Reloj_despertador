@@ -18,6 +18,7 @@ CYAN      = (120, 220, 255)  # Cian eléctrico suave
 PURPLE    = (190, 140, 255)  # Púrpura elegante
 WHITE     = (255, 255, 255)
 DIM_WHITE = (160, 170, 185)
+DARK_CARD = (20,  30,  45)
 
 # Degradados Suaves (Inspirados en la imagen)
 GRADIENTS = [
@@ -45,8 +46,8 @@ class _Fonts:
         if self._loaded: return
         self.clock      = _ttf("arialbd.ttf", 64)
         self.date_top   = _ttf("arialbd.ttf", 22)
-        self.weather_sub = _ttf("arialbd.ttf", 15)
-        self.temp_big   = _ttf("arialbd.ttf", 24)
+        self.weather_sub = _ttf("arialbd.ttf", 12)
+        self.temp_big   = _ttf("arialbd.ttf", 22)
         self.card_day   = _ttf("arialbd.ttf", 14)
         self.card_temp  = _ttf("arial.ttf",   11)
         self.menu_label = _ttf("arialbd.ttf", 16)
