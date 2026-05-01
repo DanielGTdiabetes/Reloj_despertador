@@ -197,7 +197,8 @@ class AlarmClockApp:
             self.menu_index = (self.menu_index + delta) % len(MENU_ITEMS)
         elif self.state == State.ALARM:
             if self.alarm_field == "enabled":
-                self.alarm["enabled"] = not self.alarm.get("enabled", False)
+                # Giro a la derecha activa, giro a la izquierda desactiva
+                self.alarm["enabled"] = (delta > 0)
             elif self.alarm_field == "hour":
                 self.alarm["hour"] = (int(self.alarm.get("hour", 7)) + delta) % 24
             elif self.alarm_field == "minute":
