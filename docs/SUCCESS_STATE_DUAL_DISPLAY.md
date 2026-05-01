@@ -4,7 +4,7 @@ Fecha: 2026-05-01
 Este documento registra la configuración final y validada que permite el funcionamiento simultáneo de la pantalla redonda y la rectangular compartiendo el bus SPI0 en una Raspberry Pi Zero.
 
 ## Referencia Git
-- **Commit**: `[PENDIENTE TRAS EL PRÓXIMO COMMIT]`
+- **Commit**: `5dd4b8cefeec4306a576970dd3db677b1ab8fc15`
 - **Estado**: Funcional al 100% (Imagen clara en ambas pantallas).
 
 ## Configuración de Hardware Definitiva
