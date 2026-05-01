@@ -5,7 +5,11 @@ Sin dependencias externas adicionales.
 """
 from __future__ import annotations
 import math
+import os
 from PIL import Image, ImageDraw
+
+_PNG_CACHE: dict[tuple[str, int], Image.Image | None] = {}
+_ASSETS_WEATHER = os.path.join(os.path.dirname(__file__), "..", "assets", "weather")
 
 
 # ── Paleta de colores ─────────────────────────────────────────────────────────
@@ -266,17 +270,28 @@ def get_icon_key(description: str) -> str:
 def draw_weather_icon(img: Image.Image, description: str,
                       cx: int, cy: int, size: int = 52) -> None:
     """
-    Dibuja un icono meteorológico de alta calidad sobre `img`.
-
-    Args:
-        img:         Imagen PIL sobre la que dibujar (modo RGB).
-        description: Descripción del tiempo (p.ej. "lluvia moderada").
-        cx, cy:      Centro del icono en píxeles.
-        size:        Tamaño del icono (ancho/alto aproximado).
+    Dibuja un icono meteorológico sobre `img`.
+    Intenta cargar PNG de assets/weather/{key}.png; si no existe, dibuja con PIL.
     """
-    key    = get_icon_key(description)
-    drawer = _DRAWERS.get(key, _draw_partly)
-    drawer(img, cx, cy, size)
+    key = get_icon_key(description)
+    cache_k = (key, size)
+    if cache_k not in _PNG_CACHE:
+        path = os.path.join(_ASSETS_WEATHER, f"{key}.png")
+        if os.path.exists(path):
+            try:
+                icon = Image.open(path).convert("RGBA")
+                icon = icon.resize((size, size), Image.LANCZOS)
+                _PNG_CACHE[cache_k] = icon
+            except Exception:
+                _PNG_CACHE[cache_k] = None
+        else:
+            _PNG_CACHE[cache_k] = None
+
+    icon_png = _PNG_CACHE[cache_k]
+    if icon_png is not None:
+        img.paste(icon_png, (cx - size // 2, cy - size // 2), icon_png)
+    else:
+        _DRAWERS.get(key, _draw_partly)(img, cx, cy, size)
 
 
 def render_weather_icon(description: str, size: int = 64,
