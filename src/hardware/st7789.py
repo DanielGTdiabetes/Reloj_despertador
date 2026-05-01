@@ -89,8 +89,8 @@ class ST7789Display:
         GPIO.setup(self.rst_pin, GPIO.OUT)
         GPIO.setup(self.bl_pin, GPIO.OUT)
         GPIO.output(self.cs_pin, GPIO.HIGH)
-        # Inicializamos PWM a 500Hz para el Backlight activo-LOW
-        self._pwm = GPIO.PWM(self.bl_pin, 500)
+        # Subimos a 2000Hz para el Backlight activo-LOW para ganar estabilidad
+        self._pwm = GPIO.PWM(self.bl_pin, 2000)
         self._pwm.start(100)  # Empezamos apagados (100% High = OFF)
 
         self.framebuffer = Image.new("RGB", (self.WIDTH, self.HEIGHT), (0, 0, 0))
