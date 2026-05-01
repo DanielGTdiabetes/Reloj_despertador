@@ -30,9 +30,9 @@ WHITE     = (255, 255, 255)
 DIM_WHITE = (153, 153, 153)   # ~60% blanco
 DARK_CARD = (34,  34,  34)
 ARC_BASE  = (51,  51,  51)
-MENU_HL   = AMBER               # ítem de menú activo fondo
+MENU_HL   = PHOSPHOR            # ítem de menú activo fondo (cambio a Verde Fósforo)
 MENU_TXT  = (0,   0,   0)       # texto sobre ítem activo
-COLD_BLUE = (102, 153, 255)     # temperatura mínima
+COLD_BLUE = (102, 204, 255)     # temperatura mínima más brillante
 
 # ── Fuentes ───────────────────────────────────────────────────────────────────
 

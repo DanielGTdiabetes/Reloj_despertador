@@ -1,15 +1,10 @@
 """
 rect_ui.py — Pantalla rectangular ST7789 284×76.
 
-Estilo Mid-Century Retro-Futurista.
-Modos:
-  - REPOSO:   Pronóstico 5 días con iconos PNG + primitivas.
-  - MENÚ:     Lista vertical con ítem activo en Ámbar.
-  - ALARMA:   Edición HH|MM con subrayado Ámbar.
-  - BRILLO:   Barra de progreso Ámbar.
-  - WIFI SCAN: Lista de redes con barras de señal.
-  - WIFI PASS: Teclado T9 con encoder.
-  - SONANDO:  Texto ALARMA parpadeando.
+Estilo Mid-Century Retro-Futurista MEJORADO.
+- Pronóstico con iconos GRANDES (42px).
+- Menú GRÁFICO con iconos dibujados con primitivas.
+- WiFi Scan con lista detallada.
 """
 from __future__ import annotations
 
@@ -21,118 +16,141 @@ from PIL import Image, ImageDraw
 
 from .theme import (
     F, AMBER, PHOSPHOR, BG, WHITE, DIM_WHITE,
-    DARK_CARD, ARC_BASE, COLD_BLUE, MENU_TXT,
+    DARK_CARD, ARC_BASE, COLD_BLUE, MENU_HL, MENU_TXT,
     ICONS, condition_to_icon_file,
 )
 
 W, H = 284, 76
-PAD  = 4      # padding general
-GAP  = 3      # espacio entre tarjetas de forecast
+PAD  = 4
+GAP  = 4
 
 DAYS_ES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 
 
 def _text_center_x(draw: ImageDraw.ImageDraw, y: int, text: str, font, fill,
                    x0: int = 0, x1: int = W) -> None:
-    """Dibuja texto centrado horizontalmente entre x0 y x1."""
     bb = draw.textbbox((0, 0), text, font=font)
     tw = bb[2] - bb[0]
     x = x0 + (x1 - x0 - tw) // 2
     draw.text((x, y), text, font=font, fill=fill)
 
 
+def _draw_menu_icon(draw: ImageDraw.ImageDraw, x, y, size, kind, color):
+    """Dibuja iconos de menú usando primitivas PIL."""
+    cx, cy = x + size // 2, y + size // 2
+    if kind == "alarm":
+        # Campana simplificada
+        draw.chord([x + 4, y + 4, x + size - 4, y + size], 180, 0, fill=color)
+        draw.rectangle([x + 2, y + size - 6, x + size - 2, y + size - 2], fill=color)
+        draw.ellipse([cx - 2, y + size - 3, cx + 2, y + size + 1], fill=color)
+    elif kind == "brightness":
+        # Sol
+        draw.ellipse([cx - 6, cy - 6, cx + 6, cy + 6], outline=color, width=2)
+        for a in range(0, 360, 45):
+            rad = math.radians(a)
+            x1, y1 = cx + math.cos(rad) * 8, cy + math.sin(rad) * 8
+            x2, y2 = cx + math.cos(rad) * 12, cy + math.sin(rad) * 12
+            draw.line([x1, y1, x2, y2], fill=color, width=2)
+    elif kind == "wifi":
+        # Ondas WiFi
+        for r in [6, 12, 18]:
+            draw.arc([cx - r, cy - r + 8, cx + r, cy + r + 8], 210, 330, fill=color, width=2)
+        draw.ellipse([cx - 2, cy + 10, cx + 2, cy + 14], fill=color)
+    elif kind == "sync":
+        # Flechas circulares
+        draw.arc([cx - 10, cy - 10, cx + 10, cy + 10], 30, 150, fill=color, width=2)
+        draw.arc([cx - 10, cy - 10, cx + 10, cy + 10], 210, 330, fill=color, width=2)
+        draw.polygon([(cx + 8, cy + 2), (cx + 12, cy + 6), (cx + 4, cy + 6)], fill=color)
+        draw.polygon([(cx - 8, cy - 2), (cx - 12, cy - 6), (cx - 4, cy - 6)], fill=color)
+    elif kind == "weather":
+        # Nube simplificada
+        draw.ellipse([x + 4, cy, cx, y + size - 4], fill=color)
+        draw.ellipse([cx - 4, y + 4, x + size - 4, y + size - 4], fill=color)
+        draw.rectangle([x + 8, cy + 2, x + size - 8, y + size - 4], fill=color)
+    else:
+        draw.rectangle([x + 4, y + 4, x + size - 4, y + size - 4], outline=color)
+
+
 class RectUIScreen:
     """Renderer para la pantalla rectangular ST7789 284×76."""
 
-    ICON_SIZE = 28   # píxeles de lado para iconos en tarjetas
+    ICON_SIZE = 48   # ¡Iconos gigantes!
 
     def __init__(self) -> None:
-        # Pre-cargar iconos a tamaño de tarjeta
-        _all_icons = [
-            "storm.png", "snow.png", "rain.png", "wind.png",
-            "fog.png", "partly.png", "cloud.png", "sun.png",
-        ]
-        for fname in _all_icons:
-            ICONS.composite_on_black(fname, self.ICON_SIZE)   # warm-up cache
-
-        # Frames de parpadeo para ALARM_RINGING
-        self._blink_frames = [
-            self._make_ringing_frame(AMBER),
-            self._make_ringing_frame(PHOSPHOR),
-        ]
-        self._blink_idx = 0
-        self._last_blink = 0.0
+        pass
 
     # ─────────────────────────────────────────────────────────────────────────
-    # MODO REPOSO — Pronóstico 5 días
+    # MODO REPOSO — Pronóstico 4 días (Mañana en adelante)
     # ─────────────────────────────────────────────────────────────────────────
 
     def render_forecast(self, forecast_data: list) -> Image.Image:
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
 
-        days = forecast_data[:5]
-        n = max(1, len(days))
-        total_gap = GAP * (n - 1)
-        card_w = (W - PAD * 2 - total_gap) // n
+        # Saltamos el primer día (hoy) y cogemos los 4 siguientes
+        days = forecast_data[1:5]
+        n = 4
+        card_w = (W - PAD * 2 - GAP * (n - 1)) // n
         card_h = H - PAD * 2
 
-        for i, day in enumerate(days):
+        for i in range(n):
+            day = days[i] if i < len(days) else {}
             x1 = PAD + i * (card_w + GAP)
             x2 = x1 + card_w
             y1 = PAD
             y2 = y1 + card_h
 
-            # Fondo de tarjeta
             draw.rounded_rectangle([x1, y1, x2, y2], radius=6, fill=DARK_CARD)
 
-            # Día de la semana
-            wd = day.get("weekday", i) % 7
-            day_str = DAYS_ES[wd]
-            _text_center_x(draw, y1 + 2, day_str, F.card_day, WHITE, x1, x2)
+            # Día (Abreviatura)
+            wd = day.get("weekday", (time.localtime().tm_wday + i + 1)) % 7
+            _text_center_x(draw, y1 + 3, DAYS_ES[wd], F.card_day, WHITE, x1, x2)
 
-            # Icono meteorológico (PNG compuesto)
-            desc  = day.get("description", day.get("condition", ""))
+            # Icono meteorológico grande
+            desc = day.get("description", "")
             fname = condition_to_icon_file(desc)
-            icon  = ICONS.composite_on_black(fname, self.ICON_SIZE)
-            icon_x = x1 + (card_w - self.ICON_SIZE) // 2
-            icon_y = y1 + 14
-            img.paste(icon, (icon_x, icon_y))
+            icon = ICONS.composite_on_black(fname, self.ICON_SIZE)
+            img.paste(icon, (x1 + (card_w - self.ICON_SIZE) // 2, y1 + 14))
 
-            # Temperaturas
+            # Temp Máx (en Ámbar)
             tmax = day.get("temp_max")
-            tmin = day.get("temp_min")
-            temp_y = y2 - 22
             if tmax is not None:
-                max_str = f"\u2191{tmax:.0f}\u00b0"
-                _text_center_x(draw, temp_y, max_str, F.card_temp, AMBER, x1, x2)
-            if tmin is not None:
-                min_str = f"\u2193{tmin:.0f}\u00b0"
-                _text_center_x(draw, temp_y + 12, min_str, F.card_temp, COLD_BLUE, x1, x2)
+                txt = f"{tmax:.0f}\u00b0"
+                _text_center_x(draw, y2 - 14, txt, F.card_temp, AMBER, x1, x2)
 
         return img
 
     # ─────────────────────────────────────────────────────────────────────────
-    # MODO MENÚ
+    # MODO MENÚ — GRÁFICO
     # ─────────────────────────────────────────────────────────────────────────
 
     def render_menu(self, items: list, index: int) -> Image.Image:
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
 
-        n = len(items)
-        item_h = H // n
-        for i, (key, label) in enumerate(items):
-            y1 = i * item_h
-            y2 = y1 + item_h
-            if i == index:
-                draw.rounded_rectangle([PAD, y1 + 1, W - PAD, y2 - 1],
-                                       radius=5, fill=AMBER)
-                _text_center_x(draw, y1 + (item_h - 14) // 2, label,
-                                F.menu_act, MENU_TXT)
+        # Mostrar 3 items a la vez (el anterior, el actual y el siguiente)
+        item_w = W // 3
+        for i in range(index - 1, index + 2):
+            if i < 0 or i >= len(items):
+                continue
+            
+            slot = i - (index - 1) # 0, 1, 2
+            x1 = slot * item_w
+            x2 = x1 + item_w
+            
+            kind, label = items[i]
+            is_active = (i == index)
+            
+            if is_active:
+                draw.rectangle([x1 + 4, 4, x2 - 4, H - 4], fill=MENU_HL)
+                icon_col, txt_col = MENU_TXT, MENU_TXT
             else:
-                _text_center_x(draw, y1 + (item_h - 13) // 2, label,
-                                F.menu_inn, DIM_WHITE)
+                icon_col, txt_col = AMBER, DIM_WHITE
+            
+            # Icono
+            _draw_menu_icon(draw, x1 + (item_w - 32) // 2, 10, 32, kind, icon_col)
+            # Etiqueta
+            _text_center_x(draw, 50, label, F.menu_inn if not is_active else F.menu_act, txt_col, x1, x2)
 
         return img
 
@@ -145,50 +163,27 @@ class RectUIScreen:
         draw = ImageDraw.Draw(img)
 
         enabled = alarm.get("enabled", False)
-        hour    = int(alarm.get("hour", 7))
-        minute  = int(alarm.get("minute", 0))
+        hour, minute = alarm.get("hour", 7), alarm.get("minute", 0)
 
-        # Estado ON/OFF arriba
-        status_txt = "ON" if enabled else "OFF"
-        status_col = PHOSPHOR if enabled else DIM_WHITE
-        _text_center_x(draw, 4, status_txt, F.small, status_col)
+        # Indicador visual de estado
+        draw.rectangle([10, 10, 60, 66], fill=DARK_CARD)
+        _text_center_x(draw, 20, "ALR", F.small, WHITE, 10, 60)
+        _text_center_x(draw, 40, "ON" if enabled else "OFF", F.menu_act, PHOSPHOR if enabled else DIM_WHITE, 10, 60)
 
-        # Bloques HH y MM
-        hh_str = f"{hour:02d}"
-        mm_str = f"{minute:02d}"
-        sep    = ":"
+        # Reloj grande
+        time_str = f"{hour:02d}:{minute:02d}"
+        hh_str, mm_str = f"{hour:02d}", f"{minute:02d}"
+        
+        x_base = 80
+        draw.text((x_base, 15), hh_str, font=F.alarm_hm, fill=AMBER if field == "hour" else WHITE)
+        draw.text((x_base + 50, 15), ":", font=F.alarm_hm, fill=WHITE)
+        draw.text((x_base + 70, 15), mm_str, font=F.alarm_hm, fill=AMBER if field == "minute" else WHITE)
 
-        # Posiciones
-        cx = W // 2
-        block_y = 20
-
-        bb_h = draw.textbbox((0, 0), hh_str, font=F.alarm_hm)
-        bb_m = draw.textbbox((0, 0), mm_str, font=F.alarm_hm)
-        bb_s = draw.textbbox((0, 0), sep,    font=F.alarm_hm)
-
-        bw = (bb_h[2] - bb_h[0])
-        sw = (bb_s[2] - bb_s[0])
-        mw = (bb_m[2] - bb_m[0])
-        total = bw + sw + mw + 8
-
-        hh_x = cx - total // 2
-        sep_x = hh_x + bw + 4
-        mm_x  = sep_x + sw + 4
-
-        hh_col = AMBER if field == "hour"   else DIM_WHITE
-        mm_col = AMBER if field == "minute" else DIM_WHITE
-
-        draw.text((hh_x, block_y), hh_str, font=F.alarm_hm, fill=hh_col)
-        draw.text((sep_x, block_y), sep,   font=F.alarm_hm, fill=DIM_WHITE)
-        draw.text((mm_x, block_y), mm_str, font=F.alarm_hm, fill=mm_col)
-
-        # Subrayado del bloque activo (3px)
-        bh = bb_h[3] - bb_h[1]
-        underline_y = block_y + bh + 2
+        # Subrayado
         if field == "hour":
-            draw.rectangle([hh_x, underline_y, hh_x + bw, underline_y + 3], fill=AMBER)
+            draw.rectangle([x_base, 60, x_base + 45, 64], fill=PHOSPHOR)
         elif field == "minute":
-            draw.rectangle([mm_x, underline_y, mm_x + mw, underline_y + 3], fill=AMBER)
+            draw.rectangle([x_base + 70, 60, x_base + 115, 64], fill=PHOSPHOR)
 
         return img
 
@@ -196,171 +191,125 @@ class RectUIScreen:
     # MODO BRILLO
     # ─────────────────────────────────────────────────────────────────────────
 
-    def render_brightness(self, round_val: int, rect_val: int,
-                          target: str) -> Image.Image:
+    def render_brightness(self, round_val: int, rect_val: int, target: str) -> Image.Image:
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
 
-        label = "Brillo redonda" if target == "round" else "Brillo rect"
-        value = round_val if target == "round" else rect_val
-
-        _text_center_x(draw, 8, label, F.small, DIM_WHITE)
-
-        # Barra de progreso
-        bar_x1, bar_y1 = PAD + 2, 30
-        bar_x2, bar_y2 = W - 40, 50
-        draw.rounded_rectangle([bar_x1, bar_y1, bar_x2, bar_y2],
-                                radius=4, fill=ARC_BASE)
-        fill_w = int((bar_x2 - bar_x1) * value / 100)
-        if fill_w > 0:
-            draw.rounded_rectangle([bar_x1, bar_y1, bar_x1 + fill_w, bar_y2],
-                                   radius=4, fill=AMBER)
-
-        # Valor numérico
-        val_str = f"{value}%"
-        draw.text((bar_x2 + 6, bar_y1 + 2), val_str, font=F.small, fill=WHITE)
-
-        _text_center_x(draw, 58, "Pulsa para cambiar pantalla", F.small, DIM_WHITE)
+        _text_center_x(draw, 5, "AJUSTE DE BRILLO", F.small, DIM_WHITE)
+        
+        for i, (label, val, is_target) in enumerate([
+            ("REDONDA", round_val, target == "round"),
+            ("RECT", rect_val, target == "rect")
+        ]):
+            y = 25 + i * 25
+            col = PHOSPHOR if is_target else DIM_WHITE
+            draw.text((10, y), label, font=F.menu_inn, fill=col)
+            
+            # Barra
+            bx1, bx2 = 80, 240
+            draw.rectangle([bx1, y + 2, bx2, y + 12], fill=DARK_CARD)
+            fill_w = int((bx2 - bx1) * val / 100)
+            if fill_w > 0:
+                draw.rectangle([bx1, y + 2, bx1 + fill_w, y + 12], fill=col)
+            
+            draw.text((bx2 + 10, y), f"{val}%", font=F.small, fill=WHITE)
 
         return img
 
     # ─────────────────────────────────────────────────────────────────────────
-    # MODO WIFI SCAN
+    # MODO WIFI SCAN — MEJORADO
     # ─────────────────────────────────────────────────────────────────────────
 
-    def render_wifi_scan(self, networks: list, index: int,
-                         scanning: bool) -> Image.Image:
+    def render_wifi_scan(self, networks: list, index: int, scanning: bool) -> Image.Image:
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
 
-        if scanning or not networks:
-            msg = "Buscando redes..." if scanning else "Sin redes"
-            _text_center_x(draw, H // 2 - 8, msg, F.small, DIM_WHITE)
+        if scanning:
+            _text_center_x(draw, H // 2 - 10, "ESCANEANDO REDES...", F.menu_act, PHOSPHOR)
+            return img
+        
+        if not networks:
+            _text_center_x(draw, H // 2 - 10, "NO SE ENCONTRARON REDES", F.menu_act, AMBER)
             return img
 
-        max_visible = 4
-        item_h = H // max_visible
-        start  = max(0, index - max_visible + 1)
-
-        for row, net in enumerate(networks[start:start + max_visible]):
-            i = start + row
-            y1 = row * item_h
-            active = (i == index)
-            col = AMBER if active else DIM_WHITE
-            if active:
-                draw.rectangle([0, y1, W, y1 + item_h - 1],
-                                fill=(40, 32, 0))
-
-            # SSID
-            ssid = net.get("ssid", "???")[:22]
-            draw.text((PAD + 2, y1 + (item_h - 12) // 2), ssid,
-                      font=F.small, fill=col)
-
-            # Barras de señal (4 barras)
+        # Lista de redes (3 visibles)
+        item_h = 24
+        start = max(0, index - 1)
+        for i in range(start, start + 3):
+            if i >= len(networks): break
+            row = i - start
+            y = row * item_h
+            net = networks[i]
+            is_active = (i == index)
+            
+            if is_active:
+                draw.rectangle([0, y, W, y + item_h - 1], fill=(0, 40, 0))
+                draw.rectangle([0, y, 4, y + item_h - 1], fill=PHOSPHOR)
+            
+            ssid = net.get("ssid", "???")[:25]
+            draw.text((10, y + 4), ssid, font=F.menu_inn, fill=WHITE if is_active else DIM_WHITE)
+            
+            # Señal
             bars = net.get("signal", 0)
-            bx = W - PAD - 22
             for b in range(4):
-                bh_ = 3 + b * 3
-                by_ = y1 + item_h - 4 - bh_
-                bc  = AMBER if b < bars else ARC_BASE
-                draw.rectangle([bx + b * 6, by_, bx + b * 6 + 4, y1 + item_h - 4],
-                                fill=bc)
+                draw.rectangle([W - 40 + b * 6, y + 18 - b * 4, W - 40 + b * 6 + 4, y + 18], 
+                               fill=PHOSPHOR if b < bars else DARK_CARD)
 
         return img
 
     # ─────────────────────────────────────────────────────────────────────────
-    # MODO WIFI PASSWORD (T9 con encoder)
+    # MODO WIFI PASSWORD
     # ─────────────────────────────────────────────────────────────────────────
 
-    def render_wifi_keyboard(self, ssid: str, password: str,
-                             groups: list, group: int, char_idx: int,
-                             level: int) -> Image.Image:
+    def render_wifi_keyboard(self, ssid, password, groups, group, char, level) -> Image.Image:
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
 
-        # Línea superior: SSID
-        draw.text((PAD, 2), f"Red: {ssid[:18]}", font=F.small, fill=DIM_WHITE)
+        draw.text((10, 5), f"WIFI: {ssid[:20]}", font=F.small, fill=PHOSPHOR)
+        
+        # Caja de entrada
+        draw.rectangle([10, 20, W - 10, 40], outline=WHITE)
+        cursor = "_" if int(time.time() * 2) % 2 == 0 else " "
+        draw.text((15, 24), f"{password}{cursor}", font=F.menu_inn, fill=WHITE)
 
-        # Contraseña introducida + cursor parpadeante
-        cursor = "|" if int(time.time() * 2) % 2 == 0 else " "
-        pass_txt = f"{password}{cursor}"
-        draw.text((PAD, 18), pass_txt[:28], font=F.small, fill=WHITE)
-
-        # Separador
-        draw.line([(PAD, 32), (W - PAD, 32)], fill=ARC_BASE, width=1)
-
-        # Grupo actual de caracteres
-        grp_str = groups[group] if group < len(groups) else ""
-
-        if level == 0:
-            # Mostrar grupo completo
-            _text_center_x(draw, 38, grp_str, F.menu_act, AMBER)
-            hint = "Pulsa para elegir letra"
-            _text_center_x(draw, 60, hint, F.small, DIM_WHITE)
-        else:
-            # Resaltar la letra activa dentro del grupo
-            chars = grp_str
-            row_txt = ""
-            for ci, ch in enumerate(chars):
-                row_txt += f"[{ch}]" if ci == char_idx else f" {ch} "
-            _text_center_x(draw, 40, row_txt[:30], F.small, WHITE)
-            if char_idx < len(chars):
-                hl = f"► {chars[char_idx]} ◄"
-                _text_center_x(draw, 58, hl, F.menu_act, AMBER)
+        # Teclado T9 inferior
+        item_w = W // 5
+        for i in range(group - 2, group + 3):
+            g_idx = i % len(groups)
+            slot = i - (group - 2)
+            x = slot * item_w
+            is_active = (g_idx == group)
+            
+            txt = groups[g_idx]
+            if is_active and level == 1:
+                # Mostrar letras expandidas
+                txt = f"<{txt[char]}>"
+            
+            _text_center_x(draw, 50, txt, F.menu_act if is_active else F.small, 
+                          PHOSPHOR if is_active else DIM_WHITE, x, x + item_w)
 
         return img
 
     # ─────────────────────────────────────────────────────────────────────────
-    # MODO ALARMA SONANDO
+    # MODO SONANDO
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _make_ringing_frame(self, color: tuple) -> Image.Image:
-        img = Image.new("RGB", (W, H), BG)
-        draw = ImageDraw.Draw(img)
-
-        # Borde perimetral
-        draw.rectangle([0, 0, W - 1, H - 1], outline=color, width=3)
-
-        _text_center_x(draw, 8, "ALARMA", F.menu_act, color)
-
-        # Dos opciones
-        for x, label in [(W // 4, "Detener"), (3 * W // 4, "Posponer")]:
-            bb = draw.textbbox((0, 0), label, font=F.small)
-            lw = bb[2] - bb[0]
-            draw.text((x - lw // 2, 42), label, font=F.small, fill=color)
-
-        return img
-
-    def render_ringing(self, title: str, option: int) -> Image.Image:
-        """
-        Devuelve un frame precalculado que alterna entre Ámbar y Fósforo.
-        El frame también indica la opción activa (0=Detener, 1=Posponer).
-        """
+    def render_ringing(self, title, option) -> Image.Image:
         now = time.time()
-        if now - self._last_blink >= 0.5:
-            self._blink_idx = 1 - self._blink_idx
-            self._last_blink = now
-
-        # Reconstruir con la opción activa indicada
-        color = AMBER if self._blink_idx == 0 else PHOSPHOR
+        color = PHOSPHOR if int(now * 4) % 2 == 0 else AMBER
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
 
-        draw.rectangle([0, 0, W - 1, H - 1], outline=color, width=3)
-        _text_center_x(draw, 8, title.upper(), F.menu_act, color)
-
-        labels = ["Detener", "Posponer"]
-        for i, (x, label) in enumerate(
-                [(W // 4, labels[0]), (3 * W // 4, labels[1])]):
-            bb   = draw.textbbox((0, 0), label, font=F.small)
-            lw   = bb[2] - bb[0]
-            col  = AMBER if i == option else DIM_WHITE
-            bx   = x - lw // 2 - 4
-            if i == option:
-                draw.rounded_rectangle([bx, 40, bx + lw + 8, 58],
-                                       radius=4, fill=AMBER)
-                draw.text((x - lw // 2, 42), label, font=F.small, fill=(0, 0, 0))
+        draw.rectangle([0, 0, W - 1, H - 1], outline=color, width=4)
+        _text_center_x(draw, 10, "¡ ALARMA !", F.clock if hasattr(F, 'clock') else F.alarm_hm, color)
+        
+        # Opciones
+        for i, (label, x) in enumerate([("DETENER", W // 4), ("POSPONER", 3 * W // 4)]):
+            is_sel = (i == option)
+            if is_sel:
+                draw.rectangle([x - 50, 45, x + 50, 68], fill=color)
+                draw.text((x - 35, 50), label, font=F.menu_act, fill=BG)
             else:
-                draw.text((x - lw // 2, 42), label, font=F.small, fill=DIM_WHITE)
+                draw.text((x - 35, 50), label, font=F.menu_act, fill=WHITE)
 
         return img

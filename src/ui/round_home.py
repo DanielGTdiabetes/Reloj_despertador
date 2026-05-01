@@ -121,12 +121,24 @@ class RoundHomeScreen:
         progress = now.second / 60.0
         _draw_arc_ring(draw, progress)
 
+        # Icono del tiempo actual (ahora a 64px para que sea el principal)
+        desc = weather.get("description", "")
+        temp = weather.get("temp")
+        if desc:
+            fname = condition_to_icon_file(desc)
+            icon = ICONS.composite_on_black(fname, 64)
+            img.paste(icon, (CX - 32, 10))
+
+        # Temperatura actual (debajo del icono)
+        if temp is not None:
+            temp_str = f"{temp:.1f}°"
+            _text_center(draw, 72, temp_str, F.focus_sub, PHOSPHOR)
+
         # HH:MM
         time_str = now.strftime("%H:%M")
         bb = draw.textbbox((0, 0), time_str, font=F.clock)
-        tw = bb[2] - bb[0]
-        th = bb[3] - bb[1]
-        clock_y = CY - th // 2 - 14
+        tw, th = bb[2] - bb[0], bb[3] - bb[1]
+        clock_y = CY - th // 2 + 15
         draw.text(((W - tw) // 2, clock_y), time_str, font=F.clock, fill=AMBER)
 
         # Segundos
