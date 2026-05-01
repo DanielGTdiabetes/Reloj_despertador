@@ -200,12 +200,17 @@ class ST7789Display:
 
         self._set_window()
         self._cmd(self.CMD_RAMWR)
-        self._data(buf)
+        try:
+            self._data(buf)
+        except Exception as exc:
+            print(f"[ST7789] _data FAILED: {exc}")
+            raise
+        print(f"[ST7789] frame OK spi_dev={self.spi_device} cs={self.cs_pin} first={self._first_frame_ok}")
 
         if not self._first_frame_ok:
             self._first_frame_ok = True
-            # Encender BL (activo-LOW) ya que el primer frame válido fue OK.
             GPIO.output(self.bl_pin, GPIO.LOW)
+            print("[ST7789] BL ON")
 
     def set_brightness(self, percent: int) -> None:
         """BL activo-LOW: GPIO LOW = encendido. Solo permite encender tras primer frame OK."""
