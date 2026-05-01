@@ -1,6 +1,6 @@
 """
-rect_ui.py — Centrado Visual por Software.
-Aumentado el PAD para compensar el hueco derecho.
+rect_ui.py — Versión Centrada a Tamaño Real (W=302).
+Aprovecha todo el espacio visible del hardware con los offsets originales.
 """
 from __future__ import annotations
 import time
@@ -13,11 +13,12 @@ from .theme import (
 )
 from .weather_icons import draw_weather_icon
 
-# Mantenemos W=284 para respetar tus offsets de 18
-W, H = 284, 76
-# Aumentamos PAD a 12 para empujar los marcos a la derecha y centrarlos
-PAD  = 12 
-GAP  = 6
+# W=302 es el ancho exacto visible si el offset es 18 en una pantalla de 320
+W, H = 302, 76
+# Márgenes para centrar sin encoger los cuadros
+PAD_X = 11 
+PAD_Y = 3
+GAP   = 8
 
 def _create_v_gradient(w, h, color1, color2) -> Image.Image:
     grad = Image.new("RGB", (1, 2))
@@ -37,9 +38,9 @@ class RectUIScreen:
         img  = Image.new("RGB", (W, H), BG)
         days = forecast_data[1:5]
         n    = 4
-        # Calculamos el ancho de tarjeta basándonos en el nuevo PAD
-        card_w = (W - PAD*2 - GAP*(n-1)) // n
-        card_h = H - PAD*2
+        # Cuadros grandes (aprox 64px cada uno)
+        card_w = (W - PAD_X*2 - GAP*(n-1)) // n
+        card_h = H - PAD_Y*2
 
         GRAD_COLORS = [
             ((100, 80, 200), (40, 30, 100)),
@@ -50,21 +51,21 @@ class RectUIScreen:
 
         for i in range(n):
             day  = days[i] if i < len(days) else {}
-            x1   = PAD + i * (card_w + GAP)
+            x1   = PAD_X + i * (card_w + GAP)
             c1, c2 = GRAD_COLORS[i % len(GRAD_COLORS)]
             card_img = _create_v_gradient(card_w, card_h, c1, c2)
             mask     = Image.new("L", (card_w, card_h), 0)
             ImageDraw.Draw(mask).rounded_rectangle([0, 0, card_w, card_h], radius=8, fill=255)
-            img.paste(card_img, (x1, PAD), mask)
+            img.paste(card_img, (x1, PAD_Y), mask)
             draw = ImageDraw.Draw(img)
-            draw.rounded_rectangle([x1, PAD, x1+card_w, PAD+card_h],
+            draw.rounded_rectangle([x1, PAD_Y, x1+card_w, PAD_Y+card_h],
                                    radius=8, outline=(255,255,255,30), width=1)
             wd = day.get("weekday", (time.localtime().tm_wday + i + 1) % 7)
-            _text_center_x(draw, PAD+2, ["LUN","MAR","MIE","JUE","VIE","SAB","DOM"][wd], F.card_day, WHITE, x1, x1+card_w)
-            draw_weather_icon(img, day.get("description", ""), x1 + card_w // 2, PAD + 10 + self.ICON_SIZE // 2, size=self.ICON_SIZE)
+            _text_center_x(draw, PAD_Y+3, ["LUN","MAR","MIE","JUE","VIE","SAB","DOM"][wd], F.card_day, WHITE, x1, x1+card_w)
+            draw_weather_icon(img, day.get("description", ""), x1 + card_w // 2, PAD_Y + 12 + self.ICON_SIZE // 2, size=self.ICON_SIZE)
             tmax = day.get("temp_max")
             if tmax is not None:
-                _text_center_x(draw, H-PAD-13, f"{tmax:.0f}\u00b0", F.card_temp, WHITE, x1, x1+card_w)
+                _text_center_x(draw, H-PAD_Y-14, f"{tmax:.0f}\u00b0", F.card_temp, WHITE, x1, x1+card_w)
         return img
 
     def render_menu(self, items, index) -> Image.Image:
@@ -76,7 +77,7 @@ class RectUIScreen:
             slot = i - (index - 1)
             x1, x2 = slot * item_w, (slot+1) * item_w
             if i == index:
-                draw.rounded_rectangle([x1+8, 5, x1+item_w-8, H-5], radius=12, outline=CYAN, width=2)
+                draw.rounded_rectangle([x1+10, 5, x1+item_w-10, H-5], radius=12, outline=CYAN, width=2)
                 draw_menu_icon(draw, x1+(item_w-34)//2, 12, 34, items[i][0])
                 _text_center_x(draw, 52, items[i][1].upper(), F.menu_label, WHITE, x1, x2)
             else:
@@ -86,10 +87,10 @@ class RectUIScreen:
     def render_location(self, digits, active_idx, updating=False) -> Image.Image:
         img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
         _text_center_x(draw, 6, "CÓDIGO POSTAL", F.small, CYAN, 0, W)
-        box_w, box_h = 30, 38
-        x_start = (W - (box_w*5 + 24)) // 2
+        box_w, box_h = 32, 38
+        x_start = (W - (box_w*5 + 32)) // 2
         for i, digit in enumerate(digits[:5]):
-            x = x_start + i * (box_w + 6)
+            x = x_start + i * (box_w + 8)
             is_active = (i == active_idx) and not updating
             draw.rounded_rectangle([x, 22, x+box_w, 60], radius=5, fill=(20,40,60) if is_active else (15,20,30), outline=CYAN if is_active else (50,70,90), width=2)
             _text_center_x(draw, 28, str(digit), F.clock, CYAN if is_active else WHITE, x, x+box_w)
@@ -97,7 +98,7 @@ class RectUIScreen:
 
     def render_alarm(self, alarm, field) -> Image.Image:
         img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
-        draw.rounded_rectangle([30, 8, W-30, H-8], radius=12, fill=DARK_CARD)
+        draw.rounded_rectangle([40, 8, W-40, H-8], radius=12, fill=DARK_CARD)
         _text_center_x(draw, 34, f"{alarm.get('hour',7):02d}:{alarm.get('minute',0):02d}", F.clock, WHITE, 0, W)
         return img
 
@@ -105,23 +106,23 @@ class RectUIScreen:
         img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
         for i, (lbl, val, act) in enumerate([("REDONDA", r, target=="round"), ("RECT", rect, target=="rect")]):
             y = 16 + i * 28; col = CYAN if act else DIM_WHITE
-            draw.text((35, y), lbl, font=F.small, fill=col)
-            draw.rectangle([115, y+4, 255, y+10], fill=DARK_CARD)
-            draw.rectangle([115, y+4, 115+int(140*val/100), y+10], fill=col)
+            draw.text((40, y), lbl, font=F.small, fill=col)
+            draw.rectangle([120, y+4, 260, y+10], fill=DARK_CARD)
+            draw.rectangle([120, y+4, 120+int(140*val/100), y+10], fill=col)
         return img
 
     def render_wifi_scan(self, nets, index, scanning) -> Image.Image:
         img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
         if scanning: _text_center_x(draw, 28, "BUSCANDO REDES...", F.menu_label, CYAN, 0, W)
         elif nets:
-            draw.rounded_rectangle([30, 8, W-30, H-8], radius=10, fill=DARK_CARD)
+            draw.rounded_rectangle([40, 8, W-40, H-8], radius=10, fill=DARK_CARD)
             _text_center_x(draw, 32, nets[index].get("ssid", "")[:22], F.menu_label, WHITE, 0, W)
         return img
 
     def render_wifi_keyboard(self, ssid, password, groups, group, char, level) -> Image.Image:
         img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
-        draw.rectangle([20, 22, W-20, 42], outline=WHITE, width=1)
-        draw.text((24, 25), password[:22], font=F.menu_label, fill=WHITE)
+        draw.rectangle([30, 22, W-30, 42], outline=WHITE, width=1)
+        draw.text((34, 25), password[:22], font=F.menu_label, fill=WHITE)
         _text_center_x(draw, 50, groups[group], F.menu_label, PURPLE, 0, W)
         return img
 
