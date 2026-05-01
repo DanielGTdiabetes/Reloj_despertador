@@ -82,13 +82,16 @@ class ST7789Display:
 
         self._bus = SpiBus.instance()
         self._first_frame_ok = False
+        self._pwm = None
 
         GPIO.setup(self.cs_pin, GPIO.OUT)
         GPIO.setup(self.dc_pin, GPIO.OUT)
         GPIO.setup(self.rst_pin, GPIO.OUT)
         GPIO.setup(self.bl_pin, GPIO.OUT)
         GPIO.output(self.cs_pin, GPIO.HIGH)
-        GPIO.output(self.bl_pin, GPIO.LOW)   # BL encendido inmediatamente (activo-LOW)
+        # Inicializamos PWM a 500Hz para el Backlight activo-LOW
+        self._pwm = GPIO.PWM(self.bl_pin, 500)
+        self._pwm.start(100)  # Empezamos apagados (100% High = OFF)
 
         self.framebuffer = Image.new("RGB", (self.WIDTH, self.HEIGHT), (0, 0, 0))
         self.draw = ImageDraw.Draw(self.framebuffer)
@@ -209,16 +212,21 @@ class ST7789Display:
 
         if not self._first_frame_ok:
             self._first_frame_ok = True
-            GPIO.output(self.bl_pin, GPIO.LOW)
-            print("[ST7789] BL ON")
+            if self._pwm is not None:
+                # Al encenderse por primera vez, usamos un brillo por defecto (ej: 80%)
+                # Como es activo-LOW, el duty cycle es (100 - percent)
+                self._pwm.ChangeDutyCycle(20)
+            print("[ST7789] BL ON (PWM)")
 
     def set_brightness(self, percent: int) -> None:
-        """BL activo-LOW: GPIO LOW = encendido. Solo permite encender tras primer frame OK."""
+        """BL activo-LOW: Duty cycle = 100 - percent."""
+        if self._pwm is None:
+            return
         percent = max(0, min(100, percent))
-        if percent > 0 and self._first_frame_ok:
-            GPIO.output(self.bl_pin, GPIO.LOW)
+        if self._first_frame_ok:
+            self._pwm.ChangeDutyCycle(100 - percent)
         else:
-            GPIO.output(self.bl_pin, GPIO.HIGH)
+            self._pwm.ChangeDutyCycle(100)  # Apagado
 
     def _set_window(self) -> None:
         xs = self.col_offset
@@ -234,7 +242,8 @@ class ST7789Display:
             self._cmd(self.CMD_SLPIN)
         except Exception:
             pass
-        try:
-            GPIO.output(self.bl_pin, GPIO.HIGH)  # BL off
-        except Exception:
-            pass
+        if self._pwm is not None:
+            try:
+                self._pwm.stop()
+            except Exception:
+                pass

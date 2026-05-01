@@ -35,7 +35,9 @@ class State:
 
 
 MENU_ITEMS = [
-    ("alarm", "Alarma"),
+    ("toggle_alarm", "Activar/Desactivar"),
+    ("alarm", "Programar Hora"),
+    ("brightness", "Brillo"),
     ("wifi", "WiFi"),
     ("location", "Ubicacion"),
     ("sync", "Sincronizar hora"),
@@ -285,7 +287,11 @@ class AlarmClockApp:
 
     def _select_menu(self):
         key = MENU_ITEMS[self.menu_index][0]
-        if key == "alarm":
+        if key == "toggle_alarm":
+            self.alarm["enabled"] = not self.alarm.get("enabled", False)
+            self._save_alarm()
+            self.state = State.CLOCK
+        elif key == "alarm":
             self.alarm_field = "enabled"
             self.state = State.ALARM
         elif key == "brightness":

@@ -67,6 +67,7 @@ class GC9A01:
         self._bus = SpiBus.instance()
         self._initialized = False
         self._first_frame_ok = False
+        self._pwm = None
 
         GPIO.setup(self.cs_pin, GPIO.OUT)
         GPIO.setup(self.dc_pin, GPIO.OUT)
@@ -74,7 +75,9 @@ class GC9A01:
         GPIO.output(self.cs_pin, GPIO.HIGH)
         if self.bl_pin is not None:
             GPIO.setup(self.bl_pin, GPIO.OUT)
-            GPIO.output(self.bl_pin, GPIO.LOW)  # BL apagado hasta primer frame OK
+            # Inicializamos PWM a 500Hz
+            self._pwm = GPIO.PWM(self.bl_pin, 500)
+            self._pwm.start(0)  # Empezamos apagados
 
         self.framebuffer = Image.new("RGB", (self.WIDTH, self.HEIGHT), (0, 0, 0))
         self.draw = ImageDraw.Draw(self.framebuffer)
@@ -206,13 +209,14 @@ class GC9A01:
     # ── Public API ───────────────────────────────────────────────────────────
 
     def set_brightness(self, percent: int) -> None:
-        if self.bl_pin is None:
+        if self._pwm is None:
             return
         # BL solo se permite encender una vez tenemos init OK + primer frame OK.
-        if percent > 0 and self._first_frame_ok:
-            GPIO.output(self.bl_pin, GPIO.HIGH)
+        if self._first_frame_ok:
+            val = max(0, min(100, percent))
+            self._pwm.ChangeDutyCycle(val)
         else:
-            GPIO.output(self.bl_pin, GPIO.LOW)
+            self._pwm.ChangeDutyCycle(0)
 
     def display(self, image: Optional[Image.Image] = None) -> None:
         if image is not None:
@@ -236,8 +240,9 @@ class GC9A01:
 
         if not self._first_frame_ok:
             self._first_frame_ok = True
-            if self.bl_pin is not None:
-                GPIO.output(self.bl_pin, GPIO.HIGH)
+            if self._pwm is not None:
+                # Al encenderse por primera vez, usamos un brillo por defecto o el guardado
+                self._pwm.ChangeDutyCycle(80)
 
     def clear(self, color=(0, 0, 0)) -> None:
         self.framebuffer = Image.new("RGB", (self.WIDTH, self.HEIGHT), color)
@@ -249,8 +254,8 @@ class GC9A01:
             self._cmd(self.CMD_SLPIN)
         except Exception:
             pass
-        if self.bl_pin is not None:
+        if self._pwm is not None:
             try:
-                GPIO.output(self.bl_pin, GPIO.LOW)
+                self._pwm.stop()
             except Exception:
                 pass
