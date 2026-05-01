@@ -66,13 +66,14 @@ class RoundHomeScreen:
         desc = (weather.get("description") or "").upper()
         temp = weather.get("temp")
         if desc:
-            icon = ICONS.get(condition_to_icon_file(desc), 32)
-            label = f"{desc}  {temp:.0f}\u00b0C" if temp is not None else desc
-            bb_l = draw.textbbox((0, 0), label, font=F.weather_sub)
-            sw = (bb_l[2]-bb_l[0]) + 40
-            sx = (W-sw)//2
-            img.paste(icon, (sx, 175), icon)
-            draw.text((sx+40, 180), label, font=F.weather_sub, fill=WHITE)
+            icon = ICONS.get(condition_to_icon_file(desc), 48)
+            icon_y = 158
+            img.paste(icon, (CX - 24, icon_y), icon)
+            
+            label = desc
+            temp_str = f"{temp:.1f}\u00b0C" if temp is not None else "--\u00b0C"
+            _text_center(draw, icon_y + 44, label, F.weather_sub, WHITE)
+            _text_center(draw, icon_y + 60, temp_str, F.temp_big, CYAN)
         return img
 
     def render_focus(self, title, subtitle, kind="", value=None) -> Image.Image:

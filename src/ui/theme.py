@@ -43,7 +43,7 @@ class _Fonts:
         return cls._inst
     def _ensure(self) -> None:
         if self._loaded: return
-        self.clock      = _ttf("arialbd.ttf", 78)
+        self.clock      = _ttf("arialbd.ttf", 64)
         self.date_top   = _ttf("arialbd.ttf", 22)
         self.weather_sub = _ttf("arialbd.ttf", 15)
         self.temp_big   = _ttf("arialbd.ttf", 24)
