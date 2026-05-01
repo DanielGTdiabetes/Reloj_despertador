@@ -193,7 +193,6 @@ class AlarmClockApp:
 
     def _rotate(self, delta: int) -> None:
         if delta == 0: return
-        print(f"[Debug] Rotate delta: {delta}, current state: {self.state}")
         if self.state == State.MENU:
             self.menu_index = (self.menu_index + delta) % len(MENU_ITEMS)
         elif self.state == State.ALARM:

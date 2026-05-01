@@ -21,6 +21,7 @@ class RotaryEncoder:
         GPIO.setup(self.dt_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.setup(self.sw_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
+        self._last_emit_time = 0
         self._thread = threading.Thread(target=self._state_machine_poll, daemon=True)
         self._thread.start()
 
@@ -29,6 +30,13 @@ class RotaryEncoder:
             self._callbacks[event].append(callback)
 
     def _emit(self, event):
+        now = time.time()
+        # Filtro de Cooldown optimizado: 80ms para mayor fluidez
+        if "rotate" in event:
+            if now - self._last_emit_time < 0.080:
+                return
+            self._last_emit_time = now
+            
         for callback in self._callbacks[event]:
             try:
                 callback()
@@ -36,29 +44,22 @@ class RotaryEncoder:
                 print(f"[Encoder] Callback error: {e}")
 
     def _state_machine_poll(self):
-        # Máquina de estados robusta para evitar rebotes
-        # 00 -> 01 -> 11 -> 10 -> 00  (Sentido A)
-        # 00 -> 10 -> 11 -> 01 -> 00  (Sentido B)
-        
         last_state = (GPIO.input(self.clk_pin) << 1) | GPIO.input(self.dt_pin)
         last_sw = GPIO.input(self.sw_pin)
         pressed_at = None
         long_fired = False
         
-        # Tabla de verdad para la máquina de estados
-        # 1 = CW, -1 = CCW, 0 = Sin movimiento
-        # Basado en (estado_anterior << 2) | estado_actual
+        # Tabla de verdad corregida e invertida
         TRANSITIONS = [
-            0, -1,  1,  0,  # 00 -> 00, 01, 10, 11
-            1,  0,  0, -1,  # 01 -> 00, 01, 10, 11
-           -1,  0,  0,  1,  # 10 -> 00, 01, 10, 11
-            0,  1, -1,  0   # 11 -> 00, 01, 10, 11
+            0,  1, -1,  0,
+           -1,  0,  0,  1,
+            1,  0,  0, -1,
+            0, -1,  1,  0
         ]
         
         counter = 0
         
         while self._running:
-            # Leer pines
             clk = GPIO.input(self.clk_pin)
             dt = GPIO.input(self.dt_pin)
             sw = GPIO.input(self.sw_pin)
@@ -66,12 +67,11 @@ class RotaryEncoder:
             current_state = (clk << 1) | dt
             
             if current_state != last_state:
-                # Calcular movimiento según la transición
                 idx = (last_state << 2) | current_state
                 move = TRANSITIONS[idx]
                 counter += move
                 
-                # Cada 4 micro-pasos (un ciclo completo del encoder), disparamos un evento
+                # Umbral de 4: Un clic físico = Un movimiento
                 if counter >= 4:
                     self._emit("rotate_cw")
                     counter = 0
@@ -81,7 +81,6 @@ class RotaryEncoder:
                 
                 last_state = current_state
 
-            # Lógica del botón (sin cambios, ya funcionaba bien)
             now = time.time()
             if sw != last_sw:
                 if sw == GPIO.LOW:
@@ -98,7 +97,7 @@ class RotaryEncoder:
                     self._emit("button_long_press")
             
             last_sw = sw
-            time.sleep(0.001) # Muestreo ultra-rápido de 1ms para no perder transiciones
+            time.sleep(0.001)
 
     def cleanup(self):
         self._running = False
