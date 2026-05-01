@@ -17,6 +17,7 @@ BG        = (5, 10, 25)      # Azul noche profundo
 CYAN      = (120, 220, 255)  # Cian eléctrico suave
 PURPLE    = (190, 140, 255)  # Púrpura elegante
 WHITE     = (255, 255, 255)
+YELLOW    = (255, 220, 0)    # Amarillo campana
 DIM_WHITE = (160, 170, 185)
 DARK_CARD = (20,  30,  45)
 
@@ -102,39 +103,30 @@ class _IconCache:
         return base
 
 def draw_menu_icon(draw, x, y, size, kind):
-    """Dibuja iconos premium multi-color usando primitivas."""
+    """Dibuja iconos profesionales multi-color."""
     cx, cy = x + size // 2, y + size // 2
     if kind == "alarm":
-        # Cuerpo campana blanco, badajo púrpura
-        draw.chord([x+4, y+4, x+size-4, y+size-4], 180, 0, fill=WHITE)
-        draw.rectangle([x+2, y+size-10, x+size-2, y+size-5], fill=CYAN)
-        draw.ellipse([cx-4, y+size-6, cx+4, y+size+2], fill=PURPLE)
-    elif kind == "brightness":
-        # Sol con rayos de dos colores
-        draw.ellipse([cx-8, cy-8, cx+8, cy+8], outline=WHITE, width=3)
-        for i, a in enumerate(range(0, 360, 45)):
-            r = math.radians(a)
-            col = CYAN if i % 2 == 0 else PURPLE
-            draw.line([cx+math.cos(r)*10, cy+math.sin(r)*10, cx+math.cos(r)*18, cy+math.sin(r)*18], fill=col, width=3)
+        # Campana Amarilla Clásica
+        draw.chord([x+4, y+4, x+size-4, y+size-2], 180, 0, fill=YELLOW)
+        draw.rectangle([x+2, y+size-10, x+size-2, y+size-6], fill=YELLOW)
+        draw.ellipse([cx-4, y+size-6, cx+4, y+size+2], fill=WHITE) # Badajo blanco
     elif kind == "wifi":
-        # Ondas cian y púrpura
-        for i, r in enumerate([10, 20, 30]):
-            col = CYAN if i == 0 else (PURPLE if i == 1 else WHITE)
-            draw.arc([cx-r, cy-r+15, cx+r, cy+r+15], 225, 315, fill=col, width=3)
-        draw.ellipse([cx-4, cy+22, cx+4, cy+30], fill=CYAN)
+        # WiFi Blanco Puro
+        for i, r in enumerate([8, 16, 24]):
+            draw.arc([cx-r, cy-r+12, cx+r, cy+r+12], 225, 315, fill=WHITE, width=3)
+        draw.ellipse([cx-3, cy+18, cx+3, cy+24], fill=WHITE)
     elif kind == "sync":
-        # Flechas circulares encontrándose
+        # Flechas circulares Cian/Púrpura
         draw.arc([cx-15, cy-15, cx+15, cy+15], 10, 170, fill=CYAN, width=4)
         draw.arc([cx-15, cy-15, cx+15, cy+15], 190, 350, fill=PURPLE, width=4)
         draw.polygon([(cx+15, cy), (cx+10, cy+10), (cx+20, cy+10)], fill=CYAN)
         draw.polygon([(cx-15, cy), (cx-10, cy-10), (cx-20, cy-10)], fill=PURPLE)
     elif kind == "weather":
-        # Nube blanca con sol cian
-        draw.ellipse([x+5, cy-8, cx+5, cy+2], outline=CYAN, width=2)
-        draw.ellipse([x+2, cy, cx+8, y+size-10], fill=WHITE)
+        # Nube Premium
+        draw.ellipse([x+8, cy, cx+8, y+size-10], fill=WHITE)
         draw.ellipse([cx-8, cy-5, x+size-2, y+size-10], fill=WHITE)
-        draw.rectangle([x+10, cy+5, x+size-10, y+size-10], fill=WHITE)
+        draw.rectangle([x+12, cy+5, x+size-12, y+size-10], fill=WHITE)
     else:
-        draw.rectangle([x+5, y+5, x+size-5, y+size-5], outline=WHITE, width=2)
+        draw.rounded_rectangle([x+5, y+5, x+size-5, y+size-5], radius=5, outline=WHITE, width=2)
 
 ICONS = _IconCache()

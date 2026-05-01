@@ -82,16 +82,24 @@ class RectUIScreen:
             is_active = (i == index)
             
             if is_active:
-                # Slot central destacado con degradado
-                grad = _create_v_gradient(item_w-10, H-10, PURPLE, (50, 20, 80))
+                # Slot central destacado con degradado profundo y doble borde
+                grad = _create_v_gradient(item_w-10, H-10, (40, 20, 80), (10, 5, 20))
                 mask = Image.new("L", (item_w-10, H-10), 0)
                 ImageDraw.Draw(mask).rounded_rectangle([0,0,item_w-10,H-10], radius=15, fill=255)
                 img.paste(grad, (x1+5, 5), mask)
+                
+                # Doble borde (iluminación exterior + interior)
+                draw.rounded_rectangle([x1+5, 5, x1+item_w-5, H-5], radius=15, outline=CYAN, width=2)
+                draw.rounded_rectangle([x1+7, 7, x1+item_w-7, H-7], radius=13, outline=(255,255,255,40), width=1)
+                
+                # Icono y Texto con sombra sutil
                 draw_menu_icon(draw, x1+(item_w-34)//2, 12, 34, items[i][0])
-                _text_center_x(draw, 52, items[i][1].upper(), F.menu_label, WHITE, x1, x2)
+                txt = items[i][1].upper()
+                _text_center_x(draw, 53, txt, F.menu_label, (0,0,0), x1, x2) # Sombra
+                _text_center_x(draw, 52, txt, F.menu_label, WHITE, x1, x2)
             else:
-                draw_menu_icon(draw, x1+(item_w-24)//2, 20, 24, items[i][0])
-                # No ponemos texto a los laterales para limpiar la UI
+                # Íconos laterales sutiles
+                draw_menu_icon(draw, x1+(item_w-24)//2, 22, 24, items[i][0])
         return img
 
     def render_alarm(self, alarm, field) -> Image.Image:

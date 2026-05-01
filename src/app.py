@@ -35,7 +35,6 @@ class State:
 
 MENU_ITEMS = [
     ("alarm", "Alarma"),
-    ("brightness", "Brillo"),
     ("wifi", "WiFi"),
     ("sync", "Sincronizar hora"),
     ("weather", "Actualizar clima"),
