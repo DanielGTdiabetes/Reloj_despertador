@@ -1,5 +1,6 @@
 """
-theme.py — Ajuste fino de tipografía (Reloj 68px).
+theme.py — Ajuste final de tipografía (Reloj 62px).
+Garantiza que el reloj nunca toque el anillo exterior.
 """
 from __future__ import annotations
 import os
@@ -37,7 +38,7 @@ def _ttf(name: str, size: int) -> ImageFont.FreeTypeFont:
 
 class _Fonts:
     def __init__(self):
-        self.clock = _ttf("arialbd.ttf", 68)       # Reducido a 68 para equilibrio perfecto
+        self.clock = _ttf("arialbd.ttf", 62)       # Ajuste final a 62px para seguridad total
         self.date_top = _ttf("arialbd.ttf", 20)
         self.weather_sub = _ttf("arialbd.ttf", 14) 
         self.temp_big = _ttf("arialbd.ttf", 26)    
