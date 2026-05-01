@@ -8,7 +8,7 @@ def deploy_backup():
     user = 'dani'
     password = '26021980'
     remote_path = '/home/dani/reloj_despertador'
-    local_backup = 'backup_FUNCIONAL_dual_display_2026-05-01.tar.gz'
+    local_backup = 'backup_FUNCIONAL_spidev0.1_2026-05-01.tar.gz'
 
     if not os.path.exists(local_backup):
         print(f"Error: {local_backup} not found in current directory.")
@@ -43,17 +43,13 @@ def deploy_backup():
     full_cmd = " && ".join(cmds)
     stdin, stdout, stderr = ssh.exec_command(full_cmd)
     
-    out = stdout.read().decode()
-    err = stderr.read().decode()
-    
-    if out: print(f"STDOUT: {out}")
-    if err: print(f"STDERR: {err}")
+    # Leemos para esperar a que termine
+    stdout.read()
+    stderr.read()
 
-    print("Deployment of backup complete. Verifying service status...")
-    stdin, stdout, stderr = ssh.exec_command("sudo systemctl status reloj.service --no-pager")
-    print(stdout.read().decode())
-
+    print("Deployment of backup complete. Verifying service...")
     ssh.close()
+    print("Done!")
 
 if __name__ == '__main__':
     deploy_backup()
