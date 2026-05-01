@@ -1,6 +1,6 @@
 """
-rect_ui.py — Versión con Iconos Grandes y Centrados (40px).
-Equilibrio perfecto entre visibilidad y margen de seguridad.
+rect_ui.py — Versión con Iconos Extra-Grandes (46px).
+Máximo tamaño posible manteniendo el centrado perfecto.
 """
 from __future__ import annotations
 import time
@@ -30,7 +30,7 @@ def _text_center_x(draw, y, text, font, fill, x0, x1):
     draw.text((x0 + (x1 - x0 - tw) // 2, y), text, font=font, fill=fill)
 
 class RectUIScreen:
-    ICON_SIZE = 40   # Aumentado de 28 a 40 para que se vea bien grande
+    ICON_SIZE = 46   # Subido a 46px para máxima visibilidad
 
     def render_forecast(self, forecast_data: list) -> Image.Image:
         img  = Image.new("RGB", (W, H), BG)
@@ -58,14 +58,14 @@ class RectUIScreen:
             draw.rounded_rectangle([x1, PAD_Y, x1+card_w, PAD_Y+card_h],
                                    radius=8, outline=(255,255,255,30), width=1)
             wd = day.get("weekday", (time.localtime().tm_wday + i + 1) % 7)
-            _text_center_x(draw, PAD_Y+2, ["LUN","MAR","MIE","JUE","VIE","SAB","DOM"][wd], F.card_day, WHITE, x1, x1+card_w)
+            _text_center_x(draw, PAD_Y+1, ["LUN","MAR","MIE","JUE","VIE","SAB","DOM"][wd], F.card_day, WHITE, x1, x1+card_w)
             
-            # Icono centrado (40px)
-            draw_weather_icon(img, day.get("description", ""), x1 + card_w // 2, PAD_Y + 14 + self.ICON_SIZE // 2, size=self.ICON_SIZE)
+            # Icono Extra-Grande centrado
+            draw_weather_icon(img, day.get("description", ""), x1 + card_w // 2, PAD_Y + 12 + self.ICON_SIZE // 2, size=self.ICON_SIZE)
             
             tmax = day.get("temp_max")
             if tmax is not None:
-                _text_center_x(draw, H-PAD_Y-13, f"{tmax:.0f}\u00b0", F.card_temp, WHITE, x1, x1+card_w)
+                _text_center_x(draw, H-PAD_Y-12, f"{tmax:.0f}\u00b0", F.card_temp, WHITE, x1, x1+card_w)
         return img
 
     def render_menu(self, items, index) -> Image.Image:
