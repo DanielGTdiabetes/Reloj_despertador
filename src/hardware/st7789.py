@@ -88,7 +88,7 @@ class ST7789Display:
         GPIO.setup(self.rst_pin, GPIO.OUT)
         GPIO.setup(self.bl_pin, GPIO.OUT)
         GPIO.output(self.cs_pin, GPIO.HIGH)
-        GPIO.output(self.bl_pin, GPIO.HIGH)  # BL apagado (activo-LOW)
+        GPIO.output(self.bl_pin, GPIO.LOW)   # BL encendido inmediatamente (activo-LOW)
 
         self.framebuffer = Image.new("RGB", (self.WIDTH, self.HEIGHT), (0, 0, 0))
         self.draw = ImageDraw.Draw(self.framebuffer)
