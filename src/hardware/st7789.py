@@ -222,7 +222,7 @@ class ST7789Display:
         """BL activo-LOW: Duty cycle = 100 - percent."""
         if self._pwm is None:
             return
-        percent = max(0, min(100, percent))
+        percent = max(0, min(95, percent)) # Límite de seguridad del 95%
         if self._first_frame_ok:
             self._pwm.ChangeDutyCycle(100 - percent)
         else:

@@ -213,7 +213,7 @@ class GC9A01:
             return
         # BL solo se permite encender una vez tenemos init OK + primer frame OK.
         if self._first_frame_ok:
-            val = max(0, min(100, percent))
+            val = max(0, min(95, percent)) # Límite de seguridad del 95%
             self._pwm.ChangeDutyCycle(val)
         else:
             self._pwm.ChangeDutyCycle(0)
