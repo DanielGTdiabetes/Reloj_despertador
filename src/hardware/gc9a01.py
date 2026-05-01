@@ -46,7 +46,7 @@ class GC9A01:
     CMD_INTERRE1 = 0xFE
     CMD_INTERRE2 = 0xEF
 
-    SPI_SPEED_HZ = 20_000_000
+    SPI_SPEED_HZ = 32_000_000
 
     def __init__(
         self,
