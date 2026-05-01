@@ -35,8 +35,7 @@ class State:
 
 
 MENU_ITEMS = [
-    ("toggle_alarm", "ON / OFF"),
-    ("alarm_clock", "AJUSTAR"),
+    ("alarm_clock", "ALARMA"), # Se actualizará dinámicamente a "ON 07:00", etc.
     ("brightness", "BRILLO"),
     ("wifi", "WIFI"),
     ("location", "CIUDAD"),
@@ -287,11 +286,7 @@ class AlarmClockApp:
 
     def _select_menu(self):
         key = MENU_ITEMS[self.menu_index][0]
-        if key == "toggle_alarm":
-            self.alarm["enabled"] = not self.alarm.get("enabled", False)
-            self._save_alarm()
-            self.state = State.CLOCK
-        elif key == "alarm_clock":
+        if key == "alarm_clock":
             self.alarm_field = "enabled"
             self.state = State.ALARM
         elif key == "brightness":
@@ -551,8 +546,9 @@ class AlarmClockApp:
         if self.state == State.MENU:
             key, label = MENU_ITEMS[self.menu_index]
             val = ""
-            if key == "toggle_alarm":
-                val = "ACTIVA" if self.alarm.get("enabled") else "OFF"
+            if key == "alarm_clock":
+                st = "ON" if self.alarm.get("enabled") else "OFF"
+                label = f"{st} {self.alarm.get('hour',7):02d}:{self.alarm.get('minute',0):02d}"
             return self.ui_round.render_focus(label, "Gira y pulsa", kind=key, value=val)
 
         if self.state == State.ALARM:
@@ -596,7 +592,13 @@ class AlarmClockApp:
         if self.state == State.CLOCK:
             return self.ui_rect.render_forecast(self._forecast_for_ui())
         if self.state == State.MENU:
-            return self.ui_rect.render_menu(MENU_ITEMS, self.menu_index)
+            dynamic_items = []
+            for key, label in MENU_ITEMS:
+                if key == "alarm_clock":
+                    st = "ON" if self.alarm.get("enabled") else "OFF"
+                    label = f"{st} {self.alarm.get('hour',7):02d}:{self.alarm.get('minute',0):02d}"
+                dynamic_items.append((key, label))
+            return self.ui_rect.render_menu(dynamic_items, self.menu_index)
         if self.state == State.ALARM:
             return self.ui_rect.render_alarm(self.alarm, self.alarm_field)
         if self.state == State.BRIGHTNESS:
