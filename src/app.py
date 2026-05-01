@@ -31,11 +31,13 @@ class State:
     WIFI_SCAN = "wifi_scan"
     WIFI_PASSWORD = "wifi_password"
     ALARM_RINGING = "alarm_ringing"
+    LOCATION = "location"
 
 
 MENU_ITEMS = [
     ("alarm", "Alarma"),
     ("wifi", "WiFi"),
+    ("location", "Ubicacion"),
     ("sync", "Sincronizar hora"),
     ("weather", "Actualizar clima"),
 ]
@@ -83,6 +85,10 @@ class AlarmClockApp:
         self.password_level = 0
 
         self.weather_updating = False
+        postal = self.config.get("location", {}).get("postal_code", "00000")
+        self.location_digits = [int(c) for c in postal.zfill(5)[:5]]
+        self.location_digit_idx = 0
+        self.location_updating = False
         self.status = f"Arrancando ({self.flags.summary()})"
         self.displays = None
         self.events: queue.Queue[tuple[str, object]] = queue.Queue(maxsize=200)
@@ -209,6 +215,8 @@ class AlarmClockApp:
             else:
                 chars = PASSWORD_GROUPS[self.password_group]
                 self.password_char = (self.password_char + delta) % len(chars)
+        elif self.state == State.LOCATION:
+            self.location_digits[self.location_digit_idx] = (self.location_digits[self.location_digit_idx] + delta) % 10
         elif self.state == State.ALARM_RINGING:
             self.ring_option = (self.ring_option + delta) % 2
 
@@ -238,6 +246,11 @@ class AlarmClockApp:
                 self.state = State.WIFI_PASSWORD
         elif self.state == State.WIFI_PASSWORD:
             self._password_press()
+        elif self.state == State.LOCATION:
+            if self.location_digit_idx < 4:
+                self.location_digit_idx += 1
+            else:
+                self._location_confirm()
         elif self.state == State.ALARM_RINGING:
             if self.ring_option == 0:
                 self._stop_alarm()
@@ -260,6 +273,11 @@ class AlarmClockApp:
                 self.wifi_password = self.wifi_password[:-1]
             else:
                 self.state = State.WIFI_SCAN
+        elif self.state == State.LOCATION:
+            if self.location_digit_idx > 0:
+                self.location_digit_idx -= 1
+            else:
+                self.state = State.CLOCK
         elif self.state == State.ALARM_RINGING:
             self._snooze_alarm()
         else:
@@ -280,6 +298,11 @@ class AlarmClockApp:
             self.status = "Sincronizando"
             threading.Thread(target=self.clock.sync_time, daemon=True).start()
             self.state = State.CLOCK
+        elif key == "location":
+            postal = self.config.get("location", {}).get("postal_code", "00000")
+            self.location_digits = [int(c) for c in postal.zfill(5)[:5]]
+            self.location_digit_idx = 0
+            self.state = State.LOCATION
         elif key == "weather":
             if self.flags.disable_weather:
                 self.status = "Clima desactivado"
@@ -398,6 +421,38 @@ class AlarmClockApp:
     def _command_exists(self, name):
         return subprocess.call(["which", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
 
+    def _location_confirm(self):
+        postal = "".join(str(d) for d in self.location_digits)
+        self.location_updating = True
+        self.status = "Geolocalizando"
+        self.state = State.CLOCK
+        threading.Thread(target=self._geocode_worker, args=(postal,), daemon=True).start()
+
+    def _geocode_worker(self, postal_code):
+        try:
+            geo = self.weather.geocode_postal_es(postal_code)
+            lat, lon, name = geo["lat"], geo["lon"], geo["name"]
+            self.config.setdefault("location", {}).update({
+                "lat": lat, "lon": lon, "city": name, "postal_code": postal_code,
+            })
+            self.config.setdefault("weather", {}).update({
+                "lat": lat, "lon": lon, "location": name,
+            })
+            self._save_config()
+            self.weather.lat = lat
+            self.weather.lon = lon
+            timezone = self.config.get("weather", {}).get("timezone", "Europe/Madrid")
+            self.sun = SunService(lat=lat, lon=lon, timezone=timezone)
+            self.lunar = LunarService(lat=lat, lon=lon)
+            self.status = f"OK: {name}"
+            if not self.flags.disable_weather:
+                threading.Thread(target=self._refresh_weather, daemon=True).start()
+        except Exception as exc:
+            self.status = "Error ubicacion"
+            print(f"[Location] geocode failed: {exc}")
+        finally:
+            self.location_updating = False
+
     def _refresh_weather(self):
         if self.flags.disable_weather:
             self.status = "Clima desactivado"
@@ -490,6 +545,10 @@ class AlarmClockApp:
             return self.ui_round.render_focus(title, sub, "wifi", value[:16])
         if self.state == State.WIFI_PASSWORD:
             return self.ui_round.render_focus("Contrasena", self.wifi_ssid[:16], "wifi", "*" * min(len(self.wifi_password), 8))
+        if self.state == State.LOCATION:
+            postal_str = "".join(str(d) for d in self.location_digits)
+            sub = "Confirmar" if self.location_digit_idx == 4 else f"Digito {self.location_digit_idx + 1}/5"
+            return self.ui_round.render_focus("Ubicacion", sub, "location", postal_str)
         if self.state == State.ALARM_RINGING:
             return self.ui_round.render_alarm_ringing()
         return None
@@ -514,6 +573,8 @@ class AlarmClockApp:
                 self.password_char,
                 self.password_level,
             )
+        if self.state == State.LOCATION:
+            return self.ui_rect.render_location(self.location_digits, self.location_digit_idx, self.location_updating)
         if self.state == State.ALARM_RINGING:
             return self.ui_rect.render_ringing("Despertador", self.ring_option)
         return None

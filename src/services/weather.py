@@ -177,6 +177,19 @@ class WeatherService:
             })
         return daily
 
+    def geocode_postal_es(self, postal_code: str) -> dict:
+        """Convierte código postal español en coordenadas. Devuelve {'lat', 'lon', 'name'}."""
+        resp = requests.get(
+            "http://api.openweathermap.org/geo/1.0/zip",
+            params={"zip": f"{postal_code},ES", "appid": self.api_key},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if "lat" not in data:
+            raise RuntimeError(data.get("message", "geocoding sin resultado"))
+        return {"lat": data["lat"], "lon": data["lon"], "name": data.get("name", postal_code)}
+
     def _fallback_current(self):
         return {
             "dt": int(time.time()),

@@ -154,6 +154,29 @@ class RectUIScreen:
         _text_center_x(draw, 50, txt, F.menu_label, PURPLE)
         return img
 
+    def render_location(self, digits: list, digit_idx: int, updating: bool = False) -> Image.Image:
+        img = Image.new("RGB", (W, H), BG)
+        draw = ImageDraw.Draw(img)
+        if updating:
+            _text_center_x(draw, 22, "GEOLOCALIZANDO...", F.menu_label, CYAN, 0, W)
+            return img
+        _text_center_x(draw, 3, "CODIGO POSTAL (ESPANA)", F.small, CYAN, 0, W)
+        box_w, box_h, gap = 36, 36, 8
+        start_x = (W - (5 * box_w + 4 * gap)) // 2
+        for i, d in enumerate(digits):
+            x = start_x + i * (box_w + gap)
+            y = 18
+            is_active = (i == digit_idx)
+            draw.rounded_rectangle(
+                [x, y, x + box_w, y + box_h], radius=6,
+                fill=DARK_CARD, outline=CYAN if is_active else DIM_WHITE,
+                width=2 if is_active else 1,
+            )
+            _text_center_x(draw, y + 8, str(d), F.menu_label, WHITE if is_active else DIM_WHITE, x, x + box_w)
+        hint = "Confirmar" if digit_idx == 4 else f"Digito {digit_idx + 1}/5"
+        _text_center_x(draw, 59, hint, F.small, PURPLE, 0, W)
+        return img
+
     def render_ringing(self, title, option) -> Image.Image:
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)

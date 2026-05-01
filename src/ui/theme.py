@@ -126,6 +126,12 @@ def draw_menu_icon(draw, x, y, size, kind):
         draw.ellipse([x+8, cy, cx+8, y+size-10], fill=WHITE)
         draw.ellipse([cx-8, cy-5, x+size-2, y+size-10], fill=WHITE)
         draw.rectangle([x+12, cy+5, x+size-12, y+size-10], fill=WHITE)
+    elif kind == "location":
+        # Pin de ubicación: círculo cian + gota
+        r = size // 5
+        draw.ellipse([cx-r*2, cy-r*3, cx+r*2, cy+r], fill=CYAN)
+        draw.ellipse([cx-r, cy-r*2, cx+r, cy], fill=BG)
+        draw.polygon([(cx-r, cy), (cx+r, cy), (cx, cy+r*3)], fill=CYAN)
     else:
         draw.rounded_rectangle([x+5, y+5, x+size-5, y+size-5], radius=5, outline=WHITE, width=2)
 
