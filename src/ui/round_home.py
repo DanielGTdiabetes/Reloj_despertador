@@ -274,40 +274,20 @@ class RoundHomeScreen:
     def render_focus(self, title: str, subtitle: str,
                      kind: str = "", value=None) -> Image.Image:
         """
-        Pantalla de foco para estados de menú con estética Glassmorphism.
+        Pantalla de foco para estados de menú.
+        kind puede ser: alarm, wifi, sync, weather, location, brightness.
         """
         img  = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
+        draw.ellipse([5, 5, W-5, H-5], outline=PURPLE, width=3)
 
-        # 1. Fondo con profundidad (Vignette suave)
-        for dr in range(120, 0, -6):
-            t = 1 - dr / 120
-            col = (int(5 + t*12), int(10 + t*15), int(25 + t*25))
-            draw.ellipse([CX-dr, CY-dr, CX+dr, CY+dr], fill=col)
+        # Icono central
+        draw_menu_icon(draw, CX-30, CY-60, 60, kind)
 
-        # 2. Anillo de cristal exterior
-        draw.ellipse([10, 10, W-10, H-10], outline=(*PURPLE[:3], 100) if False else PURPLE, width=2)
-        draw.ellipse([12, 12, W-12, H-12], outline=(40, 40, 80), width=1)
-
-        # 3. Icono central (Escalado para impacto)
-        icon_size = 72
-        draw_menu_icon(draw, CX - icon_size//2, CY - 75, icon_size, kind)
-
-        # 4. Textos con jerarquía clara
-        _text_center(draw, CY + 15, title.upper(), F.date_top, WHITE)
-        
+        _text_center(draw, CY+10,  title.upper(), F.date_top, WHITE)
         if value:
-            # Caja de valor destacada
-            v_str = str(value)
-            bb = draw.textbbox((0, 0), v_str, font=F.temp_big)
-            vw = bb[2] - bb[0]
-            draw.rounded_rectangle([CX-vw//2-10, CY+42, CX+vw//2+10, CY+72], 
-                                   radius=8, fill=(30, 40, 70))
-            _text_center(draw, CY + 45, v_str, F.temp_big, CYAN)
-            
-        # Subtítulo (Hint) en la parte inferior
-        _text_center(draw, H - 52, subtitle, F.weather_sub, DIM_WHITE)
-        
+            _text_center(draw, CY+35, str(value), F.temp_big, CYAN)
+        _text_center(draw, H-48, subtitle, F.weather_sub, DIM_WHITE)
         return img
 
     # ── Alarma sonando ────────────────────────────────────────────────────────

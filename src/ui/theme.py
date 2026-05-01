@@ -9,9 +9,10 @@ import os
 from typing import Optional
 from PIL import Image, ImageFont
 
-_ASSETS = os.path.join(os.path.dirname(__file__), "..", "assets")
-_FONTS  = os.path.join(_ASSETS, "fonts")
-_ICONS  = os.path.join(_ASSETS, "weather")
+_ASSETS      = os.path.join(os.path.dirname(__file__), "..", "assets")
+_FONTS       = os.path.join(_ASSETS, "fonts")
+_ICONS       = os.path.join(_ASSETS, "weather")
+_MENU_ICONS  = os.path.join(_ASSETS, "menu_icons")
 
 # ── Colores Premium ───────────────────────────────────────────────────────────
 
@@ -104,67 +105,99 @@ class _IconCache:
 
 ICONS = _IconCache()
 
-# ── Iconos de menú (Diseño PREMIUM / Glassmorphism) ──────────────────────────
+# ── Cache de iconos de menú ───────────────────────────────────────────────────
+
+class _MenuIconCache:
+    _inst: Optional["_MenuIconCache"] = None
+    def __new__(cls) -> "_MenuIconCache":
+        if cls._inst is None:
+            cls._inst = super().__new__(cls)
+            cls._inst._cache: dict[tuple[str,int], Image.Image] = {}
+        return cls._inst
+    def get(self, kind: str, size: int) -> Optional[Image.Image]:
+        key = (kind, size)
+        if key not in self._cache:
+            path = os.path.join(_MENU_ICONS, f"{kind}.png")
+            if os.path.exists(path):
+                img = Image.open(path).convert("RGBA")
+                img = img.resize((size, size), Image.LANCZOS)
+                self._cache[key] = img
+            else:
+                self._cache[key] = None
+        return self._cache[key]
+
+MENU_ICONS = _MenuIconCache()
+
+# ── Iconos de menú (dibujados con PIL como fallback) ─────────────────────────
 
 def draw_menu_icon(draw, x: int, y: int, size: int, kind: str) -> None:
     """
-    Dibuja iconos de menú con estética moderna (Glow, Gradients, Smooth).
+    Dibuja el icono del ítem de menú.
+    Primero intenta cargar PNG de assets/menu_icons/{kind}.png.
+    Si no existe, dibuja con PIL como fallback.
+    kind: "alarm" | "wifi" | "sync" | "weather" | "location" | "brightness"
     """
+    # Intentar PNG de alta calidad
+    icon_img = MENU_ICONS.get(kind, size)
+    if icon_img is not None:
+        # Necesitamos la imagen base para hacer paste — se pasa via draw._image
+        try:
+            base = draw._image
+            base.paste(icon_img, (x, y), icon_img)
+            return
+        except Exception:
+            pass
+
+    # Fallback PIL geométrico
     cx, cy = x + size // 2, y + size // 2
-    r_base = size // 2 - 4
-    
-    # 1. Glow / Aura suave de fondo (Glassmorphism effect)
-    glow_col = (*CYAN[:3], 40) if kind != "alarm" else (*AMBER[:3], 40)
-    for dr in range(3, 0, -1):
-        draw.ellipse([cx-r_base-dr, cy-r_base-dr, cx+r_base+dr, cy+r_base+dr], 
-                     outline=glow_col, width=1)
 
     if kind == "alarm":
-        # Campana estilizada con degradado
-        draw.chord([x+8, y+6, x+size-8, y+size-6], 180, 0, fill=AMBER)
-        draw.rounded_rectangle([x+4, y+size-12, x+size-4, y+size-8], radius=2, fill=AMBER)
-        draw.ellipse([cx-4, y+size-8, cx+4, y+size-2], fill=WHITE)
-        # Brillo superior
-        draw.arc([x+12, y+10, x+size-12, y+size-12], 200, 340, fill=WHITE, width=2)
+        draw.chord([x+4, y+4, x+size-4, y+size-2], 180, 0, fill=YELLOW)
+        draw.rectangle([x+2, y+size-10, x+size-2, y+size-6], fill=YELLOW)
+        draw.ellipse([cx-4, y+size-6, cx+4, y+size+2], fill=WHITE)
 
     elif kind == "wifi":
-        # Ondas WiFi con gradiente de opacidad
-        for i, r in enumerate([10, 18, 26]):
-            alpha = int(255 * (i+1)/3)
-            col = (*CYAN[:3], alpha) if False else CYAN # PIL sin alpha en lines
-            draw.arc([cx-r, cy-r+15, cx+r, cy+r+15], 225, 315, fill=CYAN, width=3)
-        draw.ellipse([cx-3, cy+22, cx+3, cy+28], fill=WHITE)
+        for r in [8, 16, 24]:
+            draw.arc([cx-r, cy-r+12, cx+r, cy+r+12], 225, 315, fill=WHITE, width=3)
+        draw.ellipse([cx-3, cy+18, cx+3, cy+24], fill=WHITE)
 
     elif kind == "sync":
-        # Flechas circulares dinámicas
-        draw.arc([cx-20, cy-20, cx+20, cy+20], 10, 160, fill=CYAN, width=4)
-        draw.arc([cx-20, cy-20, cx+20, cy+20], 190, 340, fill=PURPLE, width=4)
-        # Puntas de flecha
-        draw.polygon([(cx+20, cy), (cx+14, cy+10), (cx+26, cy+10)], fill=CYAN)
-        draw.polygon([(cx-20, cy), (cx-14, cy-10), (cx-26, cy-10)], fill=PURPLE)
+        draw.arc([cx-15, cy-15, cx+15, cy+15], 10,  170, fill=CYAN,   width=4)
+        draw.arc([cx-15, cy-15, cx+15, cy+15], 190, 350, fill=PURPLE, width=4)
+        draw.polygon([(cx+15,cy),(cx+10,cy+10),(cx+20,cy+10)], fill=CYAN)
+        draw.polygon([(cx-15,cy),(cx-10,cy-10),(cx-20,cy-10)], fill=PURPLE)
 
     elif kind == "weather":
-        # Nube volumétrica con sombra
-        draw.ellipse([x+6, cy-2, cx+6, y+size-8], fill=DIM_WHITE)
-        draw.ellipse([cx-6, cy-10, x+size-2, y+size-8], fill=WHITE)
-        draw.rectangle([x+10, cy+2, x+size-10, y+size-8], fill=WHITE)
-        # Pequeño sol asomando
-        draw.ellipse([cx+4, y+4, cx+18, y+18], fill=AMBER)
+        draw.ellipse([x+8, cy, cx+8, y+size-10], fill=WHITE)
+        draw.ellipse([cx-8, cy-5, x+size-2, y+size-10], fill=WHITE)
+        draw.rectangle([x+12, cy+5, x+size-12, y+size-10], fill=WHITE)
 
     elif kind == "location":
-        # Pin de mapa moderno (Drop shape)
-        draw.ellipse([cx-14, cy-22, cx+14, cy+6], fill=(240, 80, 80))
-        draw.polygon([(cx-12, cy-2), (cx+12, cy-2), (cx, cy+24)], fill=(240, 80, 80))
-        draw.ellipse([cx-5, cy-10, cx+5, cy], fill=WHITE)
+        pin_r = size // 4
+        pin_cx, pin_cy = cx, cy - size // 8
+        draw.ellipse([pin_cx-pin_r, pin_cy-pin_r,
+                      pin_cx+pin_r, pin_cy+pin_r], fill=(220, 70, 70))
+        draw.ellipse([pin_cx-pin_r//3, pin_cy-pin_r//3,
+                      pin_cx+pin_r//3, pin_cy+pin_r//3], fill=WHITE)
+        draw.polygon([
+            (pin_cx - pin_r//2, pin_cy + pin_r//2),
+            (pin_cx + pin_r//2, pin_cy + pin_r//2),
+            (pin_cx,            pin_cy + size//3),
+        ], fill=(220, 70, 70))
 
     elif kind == "brightness":
-        # Sol radiante
-        draw.ellipse([cx-10, cy-10, cx+10, cy+10], fill=AMBER)
+        import math
+        r_core = size // 5
+        r_ray  = int(size * 0.4)
         for i in range(8):
-            a = math.radians(i * 45)
-            draw.line([cx+math.cos(a)*14, cy+math.sin(a)*14, 
-                       cx+math.cos(a)*24, cy+math.sin(a)*24], fill=AMBER, width=3)
+            a = (i * 45) * math.pi / 180
+            x1 = cx + int((r_core+2) * math.cos(a))
+            y1 = cy + int((r_core+2) * math.sin(a))
+            x2 = cx + int(r_ray * math.cos(a))
+            y2 = cy + int(r_ray * math.sin(a))
+            draw.line([x1, y1, x2, y2], fill=YELLOW, width=2)
+        draw.ellipse([cx-r_core, cy-r_core, cx+r_core, cy+r_core], fill=YELLOW)
 
     else:
         draw.rounded_rectangle([x+5, y+5, x+size-5, y+size-5],
-                               radius=8, outline=WHITE, width=2)
+                               radius=5, outline=WHITE, width=2)

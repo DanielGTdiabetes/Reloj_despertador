@@ -4,7 +4,12 @@
 
 ### Archivos NUEVOS (no existían antes):
 ```
-deploy/src/ui/weather_icons.py  →  src/ui/weather_icons.py
+deploy/src/ui/weather_icons.py          →  src/ui/weather_icons.py
+deploy/src/assets/menu_icons/alarm.png  →  src/assets/menu_icons/alarm.png
+deploy/src/assets/menu_icons/wifi.png   →  src/assets/menu_icons/wifi.png
+deploy/src/assets/menu_icons/sync.png   →  src/assets/menu_icons/sync.png
+deploy/src/assets/menu_icons/weather.png→  src/assets/menu_icons/weather.png
+deploy/src/assets/menu_icons/location.png→ src/assets/menu_icons/location.png
 ```
 
 ### Archivos a REEMPLAZAR:
@@ -33,6 +38,9 @@ cp deploy/src/ui/weather_icons.py src/ui/
 cp deploy/src/ui/round_home.py    src/ui/
 cp deploy/src/ui/rect_ui.py       src/ui/
 cp deploy/src/ui/theme.py         src/ui/
+mkdir -p src/assets/menu_icons
+cp deploy/src/assets/menu_icons/*.png src/assets/menu_icons/
+echo "Archivos copiados OK"
 
 # 3. Editar app.py — reemplazar _render_round()
 # (ver deploy/PATCH_app_py.py)
