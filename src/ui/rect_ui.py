@@ -10,7 +10,8 @@ import math
 from PIL import Image, ImageDraw
 from .theme import (
     F, CYAN, PURPLE, BG, WHITE, DIM_WHITE,
-    DARK_CARD, GRADIENTS, ICONS, condition_to_icon_file
+    DARK_CARD, GRADIENTS, ICONS, condition_to_icon_file,
+    draw_menu_icon
 )
 
 W, H = 284, 76
@@ -28,28 +29,6 @@ def _text_center_x(draw, y, text, font, fill, x0, x1):
     tw = bb[2] - bb[0]
     draw.text((x0 + (x1 - x0 - tw) // 2, y), text, font=font, fill=fill)
 
-def _draw_icon_primitive(draw, x, y, size, kind, color):
-    cx, cy = x + size // 2, y + size // 2
-    if kind == "alarm":
-        draw.chord([x+2, y+2, x+size-2, y+size-2], 180, 0, fill=color)
-        draw.rectangle([x, y+size-6, x+size, y+size-2], fill=color)
-        draw.ellipse([cx-2, y+size-2, cx+2, y+size+2], fill=color)
-    elif kind == "brightness":
-        draw.ellipse([cx-5, cy-5, cx+5, cy+5], outline=color, width=2)
-        for a in range(0, 360, 45):
-            r = math.radians(a); x1, y1 = cx+math.cos(r)*7, cy+math.sin(r)*7
-            x2, y2 = cx+math.cos(r)*11, cy+math.sin(r)*11
-            draw.line([x1, y1, x2, y2], fill=color, width=2)
-    elif kind == "wifi":
-        for r in [5, 10, 15]: draw.arc([cx-r, cy-r+8, cx+r, cy+r+8], 225, 315, fill=color, width=2)
-        draw.ellipse([cx-2, cy+10, cx+2, cy+14], fill=color)
-    elif kind == "sync":
-        draw.arc([cx-8, cy-8, cx+8, cy+8], 0, 270, fill=color, width=2)
-        draw.polygon([(cx+8, cy-2), (cx+5, cy+3), (cx+11, cy+3)], fill=color)
-    elif kind == "weather":
-        draw.ellipse([x+2, cy-2, cx, y+size-4], fill=color)
-        draw.ellipse([cx-2, y+2, x+size-2, y+size-4], fill=color)
-        draw.rectangle([x+4, cy, x+size-4, y+size-4], fill=color)
 
 class RectUIScreen:
     ICON_SIZE = 40
@@ -108,12 +87,10 @@ class RectUIScreen:
                 mask = Image.new("L", (item_w-10, H-10), 0)
                 ImageDraw.Draw(mask).rounded_rectangle([0,0,item_w-10,H-10], radius=15, fill=255)
                 img.paste(grad, (x1+5, 5), mask)
-                col = WHITE
-                _draw_icon_primitive(draw, x1+(item_w-34)//2, 12, 34, items[i][0], WHITE)
+                draw_menu_icon(draw, x1+(item_w-34)//2, 12, 34, items[i][0])
                 _text_center_x(draw, 52, items[i][1].upper(), F.menu_label, WHITE, x1, x2)
             else:
-                col = DIM_WHITE
-                _draw_icon_primitive(draw, x1+(item_w-24)//2, 20, 24, items[i][0], col)
+                draw_menu_icon(draw, x1+(item_w-24)//2, 20, 24, items[i][0])
                 # No ponemos texto a los laterales para limpiar la UI
         return img
 

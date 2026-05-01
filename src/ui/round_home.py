@@ -7,7 +7,8 @@ import time
 from typing import Optional
 from PIL import Image, ImageDraw
 from .theme import (
-    F, CYAN, PURPLE, BG, WHITE, DIM_WHITE, ICONS, condition_to_icon_file
+    F, CYAN, PURPLE, BG, WHITE, DIM_WHITE, ICONS, 
+    condition_to_icon_file, draw_menu_icon
 )
 
 W = H = 240
@@ -20,31 +21,6 @@ def _text_center(draw, y, text, font, fill):
     w = bb[2] - bb[0]
     draw.text(((W - w) // 2, y), text, font=font, fill=fill)
 
-def _draw_icon_primitive(draw, x, y, size, kind, color):
-    """Iconos minimalistas dibujados con primitivas."""
-    cx, cy = x + size // 2, y + size // 2
-    if kind == "alarm":
-        draw.chord([x+4, y+4, x+size-4, y+size-4], 180, 0, fill=color)
-        draw.rectangle([x+2, y+size-8, x+size-2, y+size-4], fill=color)
-        draw.ellipse([cx-3, y+size-4, cx+3, y+size+2], fill=color)
-    elif kind == "brightness":
-        draw.ellipse([cx-8, cy-8, cx+8, cy+8], outline=color, width=3)
-        for a in range(0, 360, 45):
-            r = math.radians(a)
-            draw.line([cx+math.cos(r)*10, cy+math.sin(r)*10, cx+math.cos(r)*16, cy+math.sin(r)*16], fill=color, width=3)
-    elif kind == "wifi":
-        for r in [10, 20, 30]:
-            draw.arc([cx-r, cy-r+15, cx+r, cy+r+15], 225, 315, fill=color, width=3)
-        draw.ellipse([cx-4, cy+20, cx+4, cy+28], fill=color)
-    elif kind == "sync":
-        draw.arc([cx-15, cy-15, cx+15, cy+15], 0, 270, fill=color, width=4)
-        draw.polygon([(cx+15, cy-5), (cx+10, cy+5), (cx+20, cy+5)], fill=color)
-    elif kind == "weather":
-        draw.ellipse([x+5, cy-5, cx, y+size-10], fill=color)
-        draw.ellipse([cx-5, y+5, x+size-5, y+size-10], fill=color)
-        draw.rectangle([x+10, cy, x+size-10, y+size-10], fill=color)
-    else:
-        draw.rectangle([x+10, y+10, x+size-10, y+size-10], outline=color, width=2)
 
 class RoundHomeScreen:
     def __init__(self) -> None:
@@ -81,8 +57,8 @@ class RoundHomeScreen:
         draw = ImageDraw.Draw(img)
         draw.ellipse([5, 5, W-5, H-5], outline=PURPLE, width=3)
         
-        # Icono central
-        _draw_icon_primitive(draw, CX-30, CY-60, 60, kind, CYAN)
+        # Icono central multi-color
+        draw_menu_icon(draw, CX-30, CY-60, 60, kind)
         
         _text_center(draw, CY+10, title.upper(), F.date_top, WHITE)
         if value: _text_center(draw, CY+40, value, F.temp_big, CYAN)
