@@ -28,7 +28,7 @@ class WeatherService:
             self._last_error = "Sin API key"
             return False
 
-        for loader in (self._load_onecall_3, self._load_onecall_25, self._load_classic):
+        for loader in (self._load_classic, self._load_onecall_3, self._load_onecall_25):
             try:
                 current, forecast, alerts = loader()
                 if current:
