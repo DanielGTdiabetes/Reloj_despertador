@@ -10,45 +10,40 @@ def remote_bootstrap():
     remote_path = '/home/dani/reloj_despertador'
     backup_file = 'backup_FUNCIONAL_dual_display_2026-05-01.tar.gz'
 
-    print(f"--- Iniciando Restauración desde Cero en {host} ---")
+    print(f"--- Iniciando Restauración en {host} ---", flush=True)
     
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     
     try:
-        print(f"Conectando a {host}...")
-        ssh.connect(host, username=user, password=password)
+        print(f"Conectando a {host}...", flush=True)
+        ssh.connect(host, username=user, password=password, timeout=10)
         
-        print("Creando directorio de la aplicación...")
+        print("Creando directorio...", flush=True)
         ssh.exec_command(f"mkdir -p {remote_path}")
         
-        print(f"Subiendo backup funcional: {backup_file}...")
+        print(f"Subiendo {backup_file}...", flush=True)
         sftp = ssh.open_sftp()
         sftp.put(backup_file, f"{remote_path}/{backup_file}")
         sftp.close()
         
-        print("Extrayendo backup y ejecutando bootstrap...")
-        # Usamos -S para pasar la contraseña a sudo
+        print("Extrayendo y ejecutando bootstrap (esto tardará unos minutos)...", flush=True)
         bootstrap_cmd = f"""
 cd {remote_path}
 tar -xzf {backup_file}
 echo "{password}" | sudo -S bash scripts/bootstrap_fresh_pi.sh
 """
-        stdin, stdout, stderr = ssh.exec_command(bootstrap_cmd)
+        stdin, stdout, stderr = ssh.exec_command(bootstrap_cmd, get_pty=True)
         
-        # Monitorear la salida del bootstrap
-        for line in stdout:
-            print(f"[PI] {line.strip()}")
+        # Leemos línea a línea para ver el progreso real
+        for line in iter(stdout.readline, ""):
+            print(f"[PI] {line.strip()}", flush=True)
             
-        err = stderr.read().decode()
-        if err and "sudo" not in err: # Ignorar avisos de sudo
-            print(f"ERRORES: {err}")
-
-        print("\n--- Bootstrap completado. Reiniciando la Pi para aplicar cambios de hardware... ---")
+        print("\n--- Finalizado. Reiniciando... ---", flush=True)
         ssh.exec_command(f'echo "{password}" | sudo -S reboot')
         
     except Exception as e:
-        print(f"Error durante la restauración: {e}")
+        print(f"Error: {e}", flush=True)
     finally:
         ssh.close()
 
