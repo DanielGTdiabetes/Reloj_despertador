@@ -57,23 +57,23 @@ class RoundHomeScreen:
         draw.arc(box, start=-90, end=90, fill=CYAN, width=ARC_THICK)
         draw.arc(box, start=90, end=270, fill=PURPLE, width=ARC_THICK)
 
-        _text_center(draw, 40, f"{now.strftime('%A %d').upper()}", F.date_top, CYAN)
+        _text_center(draw, 35, f"{now.strftime('%A %d').upper()}", F.date_top, CYAN)
         
         t_str = now.strftime("%H:%M")
         bb = draw.textbbox((0, 0), t_str, font=F.clock)
-        draw.text(((W-(bb[2]-bb[0]))//2, CY-(bb[3]-bb[1])//2), t_str, font=F.clock, fill=WHITE)
+        draw.text(((W-(bb[2]-bb[0]))//2, 65), t_str, font=F.clock, fill=WHITE)
 
         desc = (weather.get("description") or "").upper()
         temp = weather.get("temp")
         if desc:
             icon = ICONS.get(condition_to_icon_file(desc), 48)
-            icon_y = 158
+            icon_y = 138
             img.paste(icon, (CX - 24, icon_y), icon)
             
             label = desc
             temp_str = f"{temp:.1f}\u00b0C" if temp is not None else "--\u00b0C"
             _text_center(draw, icon_y + 44, label, F.weather_sub, WHITE)
-            _text_center(draw, icon_y + 60, temp_str, F.temp_big, CYAN)
+            _text_center(draw, icon_y + 58, temp_str, F.temp_big, CYAN)
         return img
 
     def render_focus(self, title, subtitle, kind="", value=None) -> Image.Image:
