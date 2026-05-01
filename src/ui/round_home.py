@@ -1,14 +1,10 @@
 """
-round_home.py — Pantalla redonda GC9A01 240×240.
-
-Estilo Mid-Century Retro-Futurista:
-  - Reloj HH:MM en Ámbar (#FFBF00), arialbd.ttf 76pt, centrado.
-  - Segundos en 24pt, blanco al 60%.
-  - Fecha en 18pt, cuarto inferior.
-  - Anillo perimetral: arco base gris + arco progreso Ámbar (segundo a segundo).
-  - Icono campana (primitivas) si hay alarma activa, esquina superior derecha.
-  - Modo ALARM_RINGING: dos frames precalculados que alternan entre Ámbar y Fósforo.
-  - render_focus(): pantalla de estado/menú centrada en la redonda.
+round_home.py — Pantalla redonda estilo Modern Glassmorphism.
+Diseño:
+  - Top: Día y Fecha (Cian)
+  - Center: Reloj gigante (Blanco)
+  - Bottom: Icono + Clima + Temp (Blanco)
+  - Anillo: Segmentos Cian/Púrpura
 """
 from __future__ import annotations
 
@@ -19,172 +15,80 @@ from typing import Optional
 from PIL import Image, ImageDraw
 
 from .theme import (
-    F, AMBER, PHOSPHOR, BG, WHITE, DIM_WHITE, ARC_BASE
+    F, CYAN, PURPLE, BG, WHITE, DIM_WHITE, ICONS, condition_to_icon_file
 )
 
 W = H = 240
 CX = CY = 120
-ARC_THICK = 8
-ARC_R_OUT = 116   # radio exterior del anillo
-ARC_R_IN  = ARC_R_OUT - ARC_THICK
-
+ARC_THICK = 10
+ARC_R = 114
 
 def _text_center(draw: ImageDraw.ImageDraw, y: int, text: str, font, fill) -> None:
-    """Dibuja texto centrado horizontalmente en y."""
     bb = draw.textbbox((0, 0), text, font=font)
     w = bb[2] - bb[0]
     draw.text(((W - w) // 2, y), text, font=font, fill=fill)
 
-
-def _draw_arc_ring(draw: ImageDraw.ImageDraw, progress: float) -> None:
-    """
-    Dibuja el anillo perimetral.
-    progress: 0.0–1.0 (fracción del segundo en el minuto).
-    """
-    box = [CX - ARC_R_OUT, CY - ARC_R_OUT, CX + ARC_R_OUT, CY + ARC_R_OUT]
-
-    # Base gris completa
-    draw.arc(box, start=0, end=360, fill=ARC_BASE, width=ARC_THICK)
-
-    # Arco de progreso (empieza desde las 12, va en sentido horario)
-    if progress > 0:
-        end_angle = -90 + progress * 360
-        draw.arc(box, start=-90, end=end_angle, fill=AMBER, width=ARC_THICK)
-
-
-def _draw_bell(draw: ImageDraw.ImageDraw, color) -> None:
-    """
-    Dibuja un icono de campana con primitivas PIL en la esquina sup. derecha.
-    Tamaño: ~22×22px en (205, 8).
-    """
-    ox, oy = 205, 8
-    # Cuerpo campana (elipse achatada)
-    draw.ellipse([ox, oy + 4, ox + 18, oy + 16], fill=color)
-    # Mango superior (arco pequeño)
-    draw.arc([ox + 5, oy, ox + 13, oy + 8], start=180, end=0, fill=color, width=2)
-    # Badajo (línea + punto)
-    draw.line([ox + 9, oy + 16, ox + 9, oy + 20], fill=color, width=2)
-    draw.ellipse([ox + 7, oy + 19, ox + 11, oy + 23], fill=color)
-    # Base trapezoidal
-    draw.polygon([(ox + 2, oy + 15), (ox + 16, oy + 15),
-                  (ox + 18, oy + 19), (ox, oy + 19)], fill=color)
-
-
 class RoundHomeScreen:
-    """Renderer para la pantalla redonda GC9A01 240×240."""
-
-    DAYS_ES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
-    MONTHS_ES = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun",
-                 "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+    DAYS_ES = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"]
 
     def __init__(self) -> None:
-        # Precalcular los dos frames de parpadeo de alarma
-        self._blink_frames = [
-            self._make_blink_frame(AMBER),
-            self._make_blink_frame(PHOSPHOR),
-        ]
-        self._blink_idx = 0
         self._last_blink = 0.0
+        self._blink_idx = 0
 
-    # ── Frame de alarma sonando ───────────────────────────────────────────────
-
-    def _make_blink_frame(self, arc_color: tuple) -> Image.Image:
+    def render(self, now, weather, sun_info, moon, alarm, status) -> Image.Image:
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
 
-        # Anillo completo en el color dado
-        box = [CX - ARC_R_OUT, CY - ARC_R_OUT, CX + ARC_R_OUT, CY + ARC_R_OUT]
-        draw.arc(box, start=0, end=360, fill=arc_color, width=ARC_THICK + 2)
+        # 1. Anillo decorativo (Cian y Púrpura)
+        box = [CX - ARC_R, CY - ARC_R, CX + ARC_R, CY + ARC_R]
+        # Dibujamos dos arcos que se encuentran
+        sec_progress = now.second / 60.0
+        draw.arc(box, start=-90, end=-90 + 180, fill=CYAN, width=ARC_THICK)
+        draw.arc(box, start=90, end=90 + 180, fill=PURPLE, width=ARC_THICK)
 
-        # Texto ALARMA
-        _text_center(draw, 90, "ALARMA", F.focus_ttl, arc_color)
-        _text_center(draw, 130, "! ! !", F.seconds, arc_color)
+        # 2. Fecha (Arriba)
+        date_str = f"{self.DAYS_ES[now.weekday()]} {now.day}"
+        _text_center(draw, 45, date_str, F.date_top, CYAN)
 
-        return img
-
-    def _ringing_frame(self) -> Image.Image:
-        now = time.time()
-        if now - self._last_blink >= 0.5:
-            self._blink_idx = 1 - self._blink_idx
-            self._last_blink = now
-        return self._blink_frames[self._blink_idx]
-
-    # ── Render principal ──────────────────────────────────────────────────────
-
-    def render(self, now, weather: dict, sun_info: dict,
-               moon: dict, alarm: dict, status: str) -> Image.Image:
-
-        img = Image.new("RGB", (W, H), BG)
-        draw = ImageDraw.Draw(img)
-
-        # Anillo de segundos
-        progress = now.second / 60.0
-        _draw_arc_ring(draw, progress)
-
-        # Icono del tiempo actual (ahora a 64px para que sea el principal)
-        desc = weather.get("description", "")
-        temp = weather.get("temp")
-        if desc:
-            fname = condition_to_icon_file(desc)
-            icon = ICONS.composite_on_black(fname, 64)
-            img.paste(icon, (CX - 32, 10))
-
-        # Temperatura actual (debajo del icono)
-        if temp is not None:
-            temp_str = f"{temp:.1f}°"
-            _text_center(draw, 72, temp_str, F.focus_sub, PHOSPHOR)
-
-        # HH:MM
+        # 3. Reloj (Centro)
         time_str = now.strftime("%H:%M")
         bb = draw.textbbox((0, 0), time_str, font=F.clock)
         tw, th = bb[2] - bb[0], bb[3] - bb[1]
-        clock_y = CY - th // 2 + 15
-        draw.text(((W - tw) // 2, clock_y), time_str, font=F.clock, fill=AMBER)
+        draw.text(((W - tw) // 2, CY - th // 2), time_str, font=F.clock, fill=WHITE)
 
-        # Segundos
-        sec_str = now.strftime(":%S")
-        bb2 = draw.textbbox((0, 0), sec_str, font=F.seconds)
-        sec_y = clock_y + th + 2
-        draw.text(((W - (bb2[2] - bb2[0])) // 2, sec_y), sec_str,
-                  font=F.seconds, fill=DIM_WHITE)
-
-        # Fecha
-        wd  = self.DAYS_ES[now.weekday()]
-        mon = self.MONTHS_ES[now.month]
-        date_str = f"{wd} {now.day} {mon}"
-        bb3 = draw.textbbox((0, 0), date_str, font=F.date)
-        date_y = H - (bb3[3] - bb3[1]) - 22
-        draw.text(((W - (bb3[2] - bb3[0])) // 2, date_y), date_str,
-                  font=F.date, fill=DIM_WHITE)
-
-        # Icono campana si alarma activa
-        if alarm.get("enabled"):
-            _draw_bell(draw, AMBER)
+        # 4. Clima (Abajo)
+        desc = (weather.get("description", "SOLEADO")).upper()
+        temp = weather.get("temp", 18.0)
+        
+        # Icono pequeño al lado del texto
+        fname = condition_to_icon_file(desc)
+        icon = ICONS.get(fname, 32)
+        
+        weather_txt = f"{desc}  {temp:.0f}\u00b0C"
+        bb_w = draw.textbbox((0, 0), weather_txt, font=F.weather_sub)
+        total_w = (bb_w[2] - bb_w[0]) + 40
+        
+        start_x = (W - total_w) // 2
+        img.paste(icon, (start_x, 165), icon)
+        draw.text((start_x + 40, 172), weather_txt, font=F.weather_sub, fill=WHITE)
 
         return img
 
     def render_alarm_ringing(self) -> Image.Image:
-        return self._ringing_frame()
-
-    # ── Render de enfoque (menú, ajuste, etc.) ───────────────────────────────
-
-    def render_focus(self, title: str, subtitle: str,
-                     kind: str = "", value: Optional[str] = None) -> Image.Image:
+        # Parpadeo rápido para la alarma
+        now = time.time()
+        col = CYAN if int(now * 4) % 2 == 0 else PURPLE
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
+        draw.ellipse([10, 10, W-10, H-10], outline=col, width=5)
+        _text_center(draw, CY - 20, "ALARMA", F.clock, WHITE)
+        return img
 
-        # Arco completo en ámbar decorativo
-        box = [CX - ARC_R_OUT, CY - ARC_R_OUT, CX + ARC_R_OUT, CY + ARC_R_OUT]
-        draw.arc(box, start=0, end=360, fill=AMBER, width=3)
-
-        # Subtítulo arriba
-        _text_center(draw, 60, subtitle, F.focus_sub, DIM_WHITE)
-
-        # Título
-        _text_center(draw, 90, title, F.focus_ttl, AMBER)
-
-        # Valor (si lo hay)
-        if value is not None:
-            _text_center(draw, 138, value, F.focus_val, WHITE)
-
+    def render_focus(self, title, subtitle, kind="", value=None) -> Image.Image:
+        img = Image.new("RGB", (W, H), BG)
+        draw = ImageDraw.Draw(img)
+        _text_center(draw, 50, title, F.date_top, CYAN)
+        if value:
+            _text_center(draw, 100, value, F.clock, WHITE)
+        _text_center(draw, 180, subtitle, F.weather_sub, DIM_WHITE)
         return img
