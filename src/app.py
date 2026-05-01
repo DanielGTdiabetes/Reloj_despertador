@@ -36,7 +36,7 @@ class State:
 
 MENU_ITEMS = [
     ("toggle_alarm", "ON / OFF"),
-    ("alarm", "AJUSTAR"),
+    ("alarm_clock", "AJUSTAR"),
     ("brightness", "BRILLO"),
     ("wifi", "WIFI"),
     ("location", "CIUDAD"),
@@ -558,7 +558,7 @@ class AlarmClockApp:
         if self.state == State.ALARM:
             value = f"{self.alarm.get('hour', 7):02d}:{self.alarm.get('minute', 0):02d}"
             sub   = "ON" if self.alarm.get("enabled") else "OFF"
-            return self.ui_round.render_focus("Alarma", sub, "alarm", value)
+            return self.ui_round.render_focus("Alarma", sub, "alarm_clock", value)
 
         if self.state == State.BRIGHTNESS:
             value = (f"{self.brightness_round}%"
