@@ -98,8 +98,19 @@ class RectUIScreen:
 
     def render_alarm(self, alarm, field) -> Image.Image:
         img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
-        draw.rounded_rectangle([30, 8, W-30, H-8], radius=12, fill=DARK_CARD)
-        _text_center_x(draw, 34, f"{alarm.get('hour',7):02d}:{alarm.get('minute',0):02d}", F.clock, WHITE, 0, W)
+        # Recuadro centrado
+        draw.rounded_rectangle([20, 10, W-20, H-10], radius=12, fill=DARK_CARD)
+        
+        # Hora con fuente de 40px centrada verticalmente (y=18 aprox)
+        time_str = f"{alarm.get('hour',7):02d}:{alarm.get('minute',0):02d}"
+        _text_center_x(draw, 18, time_str, F.alarm_rect, WHITE, 0, W)
+        
+        # Indicador de qué estamos editando (H o M)
+        if field == "hour":
+            draw.line([W//2 - 45, H-15, W//2 - 5, H-15], fill=CYAN, width=3)
+        elif field == "minute":
+            draw.line([W//2 + 5, H-15, W//2 + 45, H-15], fill=CYAN, width=3)
+            
         return img
 
     def render_brightness(self, r, rect, target) -> Image.Image:
