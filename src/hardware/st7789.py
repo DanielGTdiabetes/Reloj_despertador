@@ -162,7 +162,7 @@ class ST7789Display:
         self._cd(self.CMD_FRCTR2, [0x0F])
         self._cd(self.CMD_PWCTRL1, [0xA4, 0xA1])
 
-        self._cmd(self.CMD_INVON)
+        self._cmd(self.CMD_INVOFF)
         self._cmd(self.CMD_NORON)
         self._cmd(self.CMD_DISPON)
         time.sleep(0.1)
