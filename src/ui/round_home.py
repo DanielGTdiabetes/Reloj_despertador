@@ -57,20 +57,22 @@ class RoundHomeScreen:
         draw.text(((W - tw) // 2, CY - th // 2), time_str, font=F.clock, fill=WHITE)
 
         # 4. Clima (Abajo)
-        desc = (weather.get("description", "SOLEADO")).upper()
-        temp = weather.get("temp", 18.0)
-        
-        # Icono pequeño al lado del texto
-        fname = condition_to_icon_file(desc)
+        desc = (weather.get("description") or "").upper()
+        temp = weather.get("temp")
+
+        fname = condition_to_icon_file(desc) if desc else "partly.png"
         icon = ICONS.get(fname, 32)
-        
-        weather_txt = f"{desc}  {temp:.0f}\u00b0C"
-        bb_w = draw.textbbox((0, 0), weather_txt, font=F.weather_sub)
-        total_w = (bb_w[2] - bb_w[0]) + 40
-        
+
+        temp_str = f"{temp:.0f}\u00b0C" if temp is not None else "--°C"
+        label = desc if desc else "..."
+
+        bb_label = draw.textbbox((0, 0), label, font=F.weather_sub)
+        label_w = bb_label[2] - bb_label[0]
+        total_w = 40 + label_w
         start_x = (W - total_w) // 2
-        img.paste(icon, (start_x, 165), icon)
-        draw.text((start_x + 40, 172), weather_txt, font=F.weather_sub, fill=WHITE)
+        img.paste(icon, (start_x, 164), icon)
+        draw.text((start_x + 40, 168), label, font=F.weather_sub, fill=WHITE)
+        _text_center(draw, 188, temp_str, F.temp_big, CYAN)
 
         return img
 
