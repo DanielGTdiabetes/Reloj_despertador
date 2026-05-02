@@ -1,0 +1,17 @@
+# Pi Zero W -- Reloj Despertador
+# /boot/firmware/config.txt
+# Copia de referencia — actualizar aquí si se cambia algo en la Pi
+# Última validación: 2026-05-02
+
+# SPI0: GC9A01 en spi0.0 (CE0/GPIO8), ST7789 en spi0.1 (CE1/GPIO7)
+dtparam=spi=on
+
+# I2C
+dtparam=i2c_arm=on
+
+# Audio I2S MAX98357A -- NO habilitar SPI1 (conflicto con I2S)
+dtoverlay=max98357a
+
+# Headless
+camera_auto_detect=0
+display_auto_detect=0

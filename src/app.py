@@ -95,6 +95,7 @@ class AlarmClockApp:
         postal = self.config.get("location", {}).get("postal_code", "00000")
         self.location_digits = [int(c) for c in postal.zfill(5)[:5]]
         self.location_digit_idx = 0
+        self.location_editing = False
         self.location_updating = False
         self.status = f"Arrancando ({self.flags.summary()})"
         self.displays = None
@@ -229,7 +230,10 @@ class AlarmClockApp:
         elif self.state == State.WIFI_PASSWORD:
             self.wifi_char_idx = (self.wifi_char_idx + delta) % len(WIFI_CHARS)
         elif self.state == State.LOCATION:
-            self.location_digits[self.location_digit_idx] = (self.location_digits[self.location_digit_idx] + delta) % 10
+            if self.location_editing:
+                self.location_digits[self.location_digit_idx] = (self.location_digits[self.location_digit_idx] + delta) % 10
+            else:
+                self.location_digit_idx = (self.location_digit_idx + delta) % 5
         elif self.state == State.ALARM_RINGING:
             self.ring_option = (self.ring_option + delta) % 2
 
@@ -264,10 +268,7 @@ class AlarmClockApp:
             else:
                 self.wifi_password += ch
         elif self.state == State.LOCATION:
-            if self.location_digit_idx < 4:
-                self.location_digit_idx += 1
-            else:
-                self._location_confirm()
+            self.location_editing = not self.location_editing
         elif self.state == State.ALARM_RINGING:
             if self.ring_option == 0:
                 self._stop_alarm()
@@ -289,10 +290,8 @@ class AlarmClockApp:
             else:
                 self.state = State.WIFI_SCAN
         elif self.state == State.LOCATION:
-            if self.location_digit_idx > 0:
-                self.location_digit_idx -= 1
-            else:
-                self.state = State.CLOCK
+            self.location_editing = False
+            self._location_confirm()
         elif self.state == State.ALARM_RINGING:
             self._snooze_alarm()
         else:
@@ -319,6 +318,7 @@ class AlarmClockApp:
             postal = self.config.get("location", {}).get("postal_code", "00000")
             self.location_digits = [int(c) for c in postal.zfill(5)[:5]]
             self.location_digit_idx = 0
+            self.location_editing = False
             self.state = State.LOCATION
         elif key == "weather":
             if self.flags.disable_weather:
@@ -583,10 +583,9 @@ class AlarmClockApp:
 
         if self.state == State.LOCATION:
             postal_str = "".join(str(d) for d in self.location_digits)
-            sub = ("Confirmar" if self.location_digit_idx == 4
-                   else f"Digito {self.location_digit_idx + 1}/5")
-            return self.ui_round.render_focus(
-                "Ubicacion", sub, "location", postal_str)
+            sub = (f"Editando digito {self.location_digit_idx + 1}"
+                   if self.location_editing else "Largo: confirmar")
+            return self.ui_round.render_focus("Ubicacion", sub, "location", postal_str)
 
         if self.state == State.ALARM_RINGING:
             return self.ui_round.render_alarm_ringing()
