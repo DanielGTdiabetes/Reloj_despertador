@@ -7,7 +7,7 @@ import math
 import time
 import os
 from PIL import Image, ImageDraw
-from .theme import F, CYAN, PURPLE, BG, WHITE, DIM_WHITE, AMBER, ICONS, draw_menu_icon
+from .theme import F, CYAN, PURPLE, BG, WHITE, DIM_WHITE, AMBER, YELLOW, ICONS, draw_menu_icon
 from .weather_icons import draw_weather_icon, draw_moon
 
 W = H = 240
@@ -20,6 +20,15 @@ def _text_center(draw, y, text, font, fill):
     draw.text(((W - (bb[2]-bb[0])) // 2, y), text, font=font, fill=fill)
 
 class RoundHomeScreen:
+    @staticmethod
+    def _star_points(cx, cy, r_out, r_in, n=5, offset_deg=0):
+        pts = []
+        for i in range(n * 2):
+            r = r_out if i % 2 == 0 else r_in
+            a = math.radians(offset_deg + i * 180 / n)
+            pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+        return pts
+
     def _draw_seconds_ring(self, draw):
         # Usa time.time() para fracción de segundo → barrido suave a 5 FPS
         seconds = time.time() % 60.0
@@ -34,11 +43,12 @@ class RoundHomeScreen:
         tail_start = int(angle) - 48
         draw.arc(box, start=tail_start, end=int(angle), fill=(0, 80, 130), width=ARC_THICK)
 
-        # Punto brillante en la punta
+        # Estrella amarilla en la punta
         rad = math.radians(angle)
         sx = CX + ARC_R * math.cos(rad)
         sy = CY + ARC_R * math.sin(rad)
-        draw.ellipse([sx - 5, sy - 5, sx + 5, sy + 5], fill=CYAN)
+        star = self._star_points(sx, sy, r_out=5.5, r_in=2.2, n=5, offset_deg=-90)
+        draw.polygon(star, fill=YELLOW)
 
     def _draw_sidebar_alarm(self, img, alarm):
         enabled = alarm.get("enabled", False)
