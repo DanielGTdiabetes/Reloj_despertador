@@ -172,13 +172,13 @@ class RectUIScreen:
                                    fill=fill_bg, outline=row_col, width=1 if not selected else 2)
             # Label
             draw.text((18, ry+6), lbl, font=F.small, fill=row_col)
-            # Barra de progreso
-            bx0, bx1 = 95, W-18
+            # Barra de progreso (deja 34px al final para el texto %)
+            bx0, bx1 = 95, W - 52
             bw = bx1 - bx0
             draw.rectangle([bx0, ry+9, bx1, ry+17], fill=(20, 25, 35))
             draw.rectangle([bx0, ry+9, bx0+int(bw*val/100), ry+17], fill=bar_col)
-            # Porcentaje
-            draw.text((bx1+2, ry+6), f"{val}%", font=F.small, fill=row_col)
+            # Porcentaje (dentro del recuadro, a la derecha)
+            draw.text((bx1 + 5, ry+6), f"{val}%", font=F.small, fill=row_col)
 
         return img
 
