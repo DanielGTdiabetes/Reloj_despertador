@@ -9,55 +9,66 @@ import threading
 import time
 
 class I2SAudio:
-    """Driver for MAX98357A I2S audio amplifier"""
-
-    def __init__(self, device="max98357a"):
+    def __init__(self, device="MAX98357A"):
         self.device = device
+        self._alsa_device = self._resolve_alsa_device(device)
         self._playing = False
         self._current_process = None
         self._volume = 80
 
-    def set_volume(self, percent):
-        self._volume = max(0, min(100, percent))
+    def _resolve_alsa_device(self, name):
+        """Return a working aplay -D spec, falling back to plughw:0 if needed."""
         try:
-            # Comando amixer para el amplificador I2S
-            # Usamos 'Digital' o 'PCM' según el driver de la Pi
-            cmd = ["amixer", "-q", "set", "PCM", f"{self._volume}%"]
-            subprocess.run(cmd, check=False)
-        except Exception as e:
-            print(f"[Audio] Error setting volume: {e}")
+            out = subprocess.check_output(["aplay", "-l"], stderr=subprocess.DEVNULL, text=True)
+            for line in out.splitlines():
+                # Match case-insensitively
+                if name.lower() in line.lower() and line.startswith("card"):
+                    card_num = line.split(":")[0].replace("card", "").strip()
+                    return f"plughw:{card_num},0"
+        except Exception:
+            pass
+        return "plughw:0,0"
+
+    def set_volume(self, percent):
+        # MAX98357A gain is hardware-controlled; store value for reference only
+        self._volume = max(0, min(100, percent))
 
     def play_file(self, filepath, loop=False):
         if not os.path.exists(filepath):
-            print(f"Audio file not found: {filepath}")
+            print(f"[Audio] file not found: {filepath}")
             return
 
+        self.stop()
         self._playing = True
 
         def _play():
             while self._playing:
-                cmd = [
-                    "aplay",
-                    "-D", f"plughw:CARD={self.device}",
-                    "-q",
-                    filepath
-                ]
+                cmd = ["aplay", "-D", self._alsa_device, "-q", filepath]
                 try:
                     self._current_process = subprocess.Popen(
                         cmd,
                         stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL
+                        stderr=subprocess.PIPE,
                     )
-                    self._current_process.wait()
+                    _, err = self._current_process.communicate()
+                    if err and self._playing:
+                        print(f"[Audio] aplay: {err.decode(errors='replace').strip()}")
                 except Exception as e:
-                    print(f"Audio playback error: {e}")
+                    print(f"[Audio] playback error: {e}")
                     time.sleep(1)
-
                 if not loop:
                     break
 
-        thread = threading.Thread(target=_play, daemon=True)
-        thread.start()
+        threading.Thread(target=_play, daemon=True).start()
+
+    def stop(self):
+        self._playing = False
+        if self._current_process:
+            try:
+                self._current_process.terminate()
+            except Exception:
+                pass
+            self._current_process = None
 
     def stop(self):
         self._playing = False
@@ -67,18 +78,3 @@ class I2SAudio:
 
     def is_playing(self):
         return self._playing
-
-    def generate_beep(self, filepath, frequency=800, duration=0.5):
-        try:
-            import numpy as np
-            import scipy.io.wavfile as wav
-
-            sample_rate = 44100
-            t = np.linspace(0, duration, int(sample_rate * duration))
-            tone = (np.sin(2 * np.pi * frequency * t) * 32767).astype(np.int16)
-
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            wav.write(filepath, sample_rate, tone)
-            return True
-        except ImportError:
-            return False
