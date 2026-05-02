@@ -87,6 +87,7 @@ class ST7789Display:
         GPIO.setup(self.cs_pin, GPIO.OUT)
         GPIO.setup(self.dc_pin, GPIO.OUT)
         GPIO.setup(self.rst_pin, GPIO.OUT)
+        GPIO.output(self.rst_pin, GPIO.HIGH)  # evita LOW espurio en cold boot
         GPIO.setup(self.bl_pin, GPIO.OUT)
         GPIO.output(self.cs_pin, GPIO.HIGH)
         # Bajamos a 200Hz para el Backlight activo-LOW para máxima estabilidad
