@@ -515,7 +515,7 @@ class AlarmClockApp:
 
     def _render(self):
         now = self.clock.now()
-        if self.state != State.ALARM_RINGING:
+        if self.state not in (State.ALARM_RINGING, State.ALARM):
             self._check_alarm(now)
 
         round_img = self._render_round(now)
