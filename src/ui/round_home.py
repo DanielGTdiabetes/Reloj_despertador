@@ -114,6 +114,9 @@ class RoundHomeScreen:
         self._draw_seconds_ring(draw)
         _text_center(draw, 45, now.strftime("%H:%M"), F.clock, WHITE)
         draw_moon(img, CX, CY + 35, r=35, phase_frac=moon.get("phase", 0.5))
+        phase_name = moon.get("phase_name", "")
+        if phase_name:
+            _text_center(draw, 198, phase_name, F.small, PURPLE)
         return img
 
     def render_focus(self, title, subtitle, kind="", value=None) -> Image.Image:
