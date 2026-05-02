@@ -39,7 +39,6 @@ class RoundHomeScreen:
                 "ring_tail": (110, 55, 8),
                 "ring_tip":  (255, 200, 0),
                 "temp":      AMBER,
-                "sun_arrow": "↑",
             }
         elif period == "sunset":
             return {
@@ -49,7 +48,6 @@ class RoundHomeScreen:
                 "ring_tail": (110, 30, 8),
                 "ring_tip":  (255, 110, 20),
                 "temp":      (255, 140, 60),
-                "sun_arrow": "↓",
             }
         else:
             return {
@@ -59,7 +57,6 @@ class RoundHomeScreen:
                 "ring_tail": (0, 80, 130),
                 "ring_tip":  YELLOW,
                 "temp":      CYAN,
-                "sun_arrow": "",
             }
 
     def _draw_seconds_ring(self, draw, tail_col=(0, 80, 130), tip_col=YELLOW):
@@ -136,13 +133,6 @@ class RoundHomeScreen:
         _text_center(draw, 178, desc[:22], F.small, DIM_WHITE)
         temp = weather.get("temp")
         _text_center(draw, 194, f"{temp:.1f}°C" if temp else "--.-°C", F.temp_big, th["temp"])
-
-        # 7. Hora amanecer/ocaso durante hora dorada
-        if th["sun_arrow"]:
-            key = "sunrise" if th["sun_arrow"] == "↑" else "sunset"
-            sun_dt = sun_info.get(key)
-            if sun_dt:
-                _text_center(draw, 213, f"{th['sun_arrow']} {sun_dt.strftime('%H:%M')}", F.small, th["clock"])
 
         return img
 

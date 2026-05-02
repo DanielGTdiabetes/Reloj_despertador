@@ -32,8 +32,17 @@ def _text_center_x(draw, y, text, font, fill, x0, x1):
 class RectUIScreen:
     ICON_SIZE = 42   # Bajamos a 42 para dejar hueco a las gotas de lluvia
 
-    def render_forecast(self, forecast_data: list) -> Image.Image:
-        img  = Image.new("RGB", (W, H), BG)
+    @staticmethod
+    def _period_theme(period: str):
+        if period == "sunrise":
+            return (18, 10, 4), (32, 22, 8), (70, 45, 15)
+        if period == "sunset":
+            return (18, 6, 14), (34, 16, 10), (70, 30, 15)
+        return BG, (20, 22, 28), (40, 45, 55)
+
+    def render_forecast(self, forecast_data: list, period: str = "day") -> Image.Image:
+        bg, card_bg, card_border = self._period_theme(period)
+        img  = Image.new("RGB", (W, H), bg)
         days = forecast_data[1:5]
         n    = 4
         card_w = (W - PAD_X*2 - GAP*(n-1)) // n
@@ -42,17 +51,15 @@ class RectUIScreen:
         for i in range(n):
             day  = days[i] if i < len(days) else {}
             x1   = PAD_X + i * (card_w + GAP)
-            
-            # Fondo de tarjeta Gris Carbón muy sutil
-            card_img = Image.new("RGB", (card_w, card_h), (20, 22, 28))
+
+            card_img = Image.new("RGB", (card_w, card_h), card_bg)
             mask     = Image.new("L", (card_w, card_h), 0)
             ImageDraw.Draw(mask).rounded_rectangle([0, 0, card_w, card_h], radius=8, fill=255)
             img.paste(card_img, (x1, PAD_Y), mask)
-            
+
             draw = ImageDraw.Draw(img)
-            # Borde sutil
             draw.rounded_rectangle([x1, PAD_Y, x1+card_w, PAD_Y+card_h],
-                                   radius=8, outline=(40, 45, 55), width=1)
+                                   radius=8, outline=card_border, width=1)
             wd = day.get("weekday", (time.localtime().tm_wday + i + 1) % 7)
             _text_center_x(draw, PAD_Y+1, ["LUN","MAR","MIE","JUE","VIE","SAB","DOM"][wd], F.card_day, WHITE, x1, x1+card_w)
             

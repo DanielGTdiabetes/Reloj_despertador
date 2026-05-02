@@ -594,7 +594,8 @@ class AlarmClockApp:
 
     def _render_rect(self, now):
         if self.state == State.CLOCK:
-            return self.ui_rect.render_forecast(self._forecast_for_ui())
+            period = self.sun.get_time_of_day()
+            return self.ui_rect.render_forecast(self._forecast_for_ui(), period=period)
         if self.state == State.MENU:
             dynamic_items = []
             for key, label in MENU_ITEMS:
