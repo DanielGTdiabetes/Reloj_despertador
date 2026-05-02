@@ -365,7 +365,7 @@ class AlarmClockApp:
     def _wifi_scan_worker(self):
         networks = []
         try:
-            out = subprocess.check_output(["iwlist", "wlan0", "scan"], stderr=subprocess.DEVNULL, text=True, timeout=12)
+            out = subprocess.check_output(["sudo", "-n", "/sbin/iwlist", "wlan0", "scan"], stderr=subprocess.DEVNULL, text=True, timeout=15)
             for cell in out.split("Cell ")[1:]:
                 ssid_match = re.search(r'ESSID:"([^"]*)"', cell)
                 sig_match = re.search(r"Signal level=(-?\d+)", cell)

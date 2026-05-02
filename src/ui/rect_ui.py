@@ -193,15 +193,17 @@ class RectUIScreen:
             return img
         # Mostrar hasta 3 redes: la seleccionada en el centro
         for slot, offset in enumerate([-1, 0, 1]):
-            i = (index + offset) % len(nets)
+            i = index + offset
+            # No mostrar vecinos si se saldría del rango real
+            if i < 0 or i >= len(nets):
+                continue
             net = nets[i]
             is_sel = (offset == 0)
             ry = 6 + slot * 22
             if is_sel:
                 draw.rounded_rectangle([8, ry, W-8, ry+20], radius=5,
                                        fill=DARK_CARD, outline=CYAN, width=2)
-                draw.text((18, ry+4), net["ssid"][:28], font=F.menu_label, fill=WHITE)
-                # Barras de señal a la derecha
+                draw.text((18, ry+4), net["ssid"][:26], font=F.menu_label, fill=WHITE)
                 bars = net.get("signal", 0)
                 for b in range(4):
                     bx = W - 30 + b * 6
@@ -210,7 +212,7 @@ class RectUIScreen:
                     draw.rectangle([bx, ry+18-bh, bx+4, ry+18], fill=col)
             else:
                 col = (55, 65, 80)
-                draw.text((18, ry+4), net["ssid"][:28], font=F.small, fill=col)
+                draw.text((18, ry+4), net["ssid"][:26], font=F.small, fill=col)
         return img
 
     def render_wifi_keyboard(self, ssid, password, chars, char_idx) -> Image.Image:
