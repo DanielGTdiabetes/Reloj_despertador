@@ -144,13 +144,42 @@ class RectUIScreen:
 
         return img
 
-    def render_brightness(self, r, rect, target) -> Image.Image:
-        img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
-        for i, (lbl, val, act) in enumerate([("REDONDA", r, target=="round"), ("RECT", rect, target=="rect")]):
-            y = 16 + i * 28; col = CYAN if act else DIM_WHITE
-            draw.text((35, y), lbl, font=F.small, fill=col)
-            draw.rectangle([115, y+4, 255, y+10], fill=DARK_CARD)
-            draw.rectangle([115, y+4, 115+int(140*val/100), y+10], fill=col)
+    def render_brightness(self, r, rect, target, editing=False) -> Image.Image:
+        img = Image.new("RGB", (W, H), BG)
+        draw = ImageDraw.Draw(img)
+
+        rows = [("REDONDA", r, "round"), ("RECT", rect, "rect")]
+        for i, (lbl, val, key) in enumerate(rows):
+            selected = (target == key)
+            active_edit = selected and editing
+
+            if active_edit:
+                row_col = AMBER
+                fill_bg = (35, 20, 0)
+                bar_col = AMBER
+            elif selected:
+                row_col = CYAN
+                fill_bg = DARK_CARD
+                bar_col = CYAN
+            else:
+                row_col = DIM_WHITE
+                fill_bg = (12, 16, 24)
+                bar_col = (50, 70, 90)
+
+            ry = 8 + i * 32
+            # Fila con fondo de caja
+            draw.rounded_rectangle([10, ry, W-10, ry+26], radius=6,
+                                   fill=fill_bg, outline=row_col, width=1 if not selected else 2)
+            # Label
+            draw.text((18, ry+6), lbl, font=F.small, fill=row_col)
+            # Barra de progreso
+            bx0, bx1 = 95, W-18
+            bw = bx1 - bx0
+            draw.rectangle([bx0, ry+9, bx1, ry+17], fill=(20, 25, 35))
+            draw.rectangle([bx0, ry+9, bx0+int(bw*val/100), ry+17], fill=bar_col)
+            # Porcentaje
+            draw.text((bx1+2, ry+6), f"{val}%", font=F.small, fill=row_col)
+
         return img
 
     def render_wifi_scan(self, nets, index, scanning) -> Image.Image:

@@ -76,6 +76,7 @@ class AlarmClockApp:
         self.brightness_round = int(ui_cfg.get("brightness_round", 80))
         self.brightness_rect = int(ui_cfg.get("brightness_rect", 80))
         self.brightness_target = "round"
+        self.brightness_editing = False
 
         self.wifi_networks = []
         self.wifi_index = 0
@@ -209,11 +210,16 @@ class AlarmClockApp:
                 idx = fields.index(self.alarm_field)
                 self.alarm_field = fields[(idx + delta) % len(fields)]
         elif self.state == State.BRIGHTNESS:
-            if self.brightness_target == "round":
-                self.brightness_round = max(0, min(100, self.brightness_round + delta * 5))
+            if self.brightness_editing:
+                if self.brightness_target == "round":
+                    self.brightness_round = max(0, min(100, self.brightness_round + delta * 5))
+                else:
+                    self.brightness_rect = max(0, min(100, self.brightness_rect + delta * 5))
+                self._apply_brightness()
             else:
-                self.brightness_rect = max(0, min(100, self.brightness_rect + delta * 5))
-            self._apply_brightness()
+                targets = ["round", "rect"]
+                idx = targets.index(self.brightness_target)
+                self.brightness_target = targets[(idx + delta) % len(targets)]
         elif self.state == State.WIFI_SCAN:
             self.wifi_index = (self.wifi_index + delta) % max(1, len(self.wifi_networks))
         elif self.state == State.WIFI_PASSWORD:
@@ -243,7 +249,7 @@ class AlarmClockApp:
         elif self.state == State.ALARM:
             self.alarm_editing = not self.alarm_editing
         elif self.state == State.BRIGHTNESS:
-            self.brightness_target = "rect" if self.brightness_target == "round" else "round"
+            self.brightness_editing = not self.brightness_editing
         elif self.state == State.WIFI_SCAN:
             if self.wifi_networks:
                 self.wifi_ssid = self.wifi_networks[self.wifi_index].get("ssid", "")
@@ -299,6 +305,7 @@ class AlarmClockApp:
             self.state = State.ALARM
         elif key == "brightness":
             self.brightness_target = "round"
+            self.brightness_editing = False
             self.state = State.BRIGHTNESS
         elif key == "wifi":
             self.state = State.WIFI_SCAN
@@ -570,10 +577,9 @@ class AlarmClockApp:
             value = (f"{self.brightness_round}%"
                      if self.brightness_target == "round"
                      else f"{self.brightness_rect}%")
-            title = ("Brillo redonda" if self.brightness_target == "round"
-                     else "Brillo rect")
-            return self.ui_round.render_focus(
-                title, "Pulsar cambia pantalla", "brightness", value)
+            title = "Brillo redonda" if self.brightness_target == "round" else "Brillo rect"
+            sub = f"Editando {title.split()[1]}" if self.brightness_editing else "Selec. pantalla"
+            return self.ui_round.render_focus(title, sub, "brightness", value)
 
         if self.state == State.WIFI_SCAN:
             sub   = "Buscando" if self.wifi_scanning else "Elige red"
@@ -612,7 +618,7 @@ class AlarmClockApp:
         if self.state == State.ALARM:
             return self.ui_rect.render_alarm(self.alarm, self.alarm_field, self.alarm_editing)
         if self.state == State.BRIGHTNESS:
-            return self.ui_rect.render_brightness(self.brightness_round, self.brightness_rect, self.brightness_target)
+            return self.ui_rect.render_brightness(self.brightness_round, self.brightness_rect, self.brightness_target, self.brightness_editing)
         if self.state == State.WIFI_SCAN:
             return self.ui_rect.render_wifi_scan(self.wifi_networks, self.wifi_index, self.wifi_scanning)
         if self.state == State.WIFI_PASSWORD:
