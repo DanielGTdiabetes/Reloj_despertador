@@ -43,7 +43,13 @@ MENU_ITEMS = [
     ("weather", "CLIMA"),
 ]
 
-PASSWORD_GROUPS = ["OK", "<", "abcABC", "defDEF", "ghiGHI", "jklJKL", "mnoMNO", "pqrsPQRS", "tuvTUV", "wxyzWXYZ", "0123456789", "@#-_ ."]
+WIFI_CHARS = (
+    ["OK", "DEL"] +
+    list("ABCDEFGHIJKLMNOPQRSTUVWXYZ") +
+    list("abcdefghijklmnopqrstuvwxyz") +
+    list("0123456789") +
+    list(" !@#$%&*()-_+=.,:;?/\"\\'")
+)
 
 
 class AlarmClockApp:
@@ -83,9 +89,7 @@ class AlarmClockApp:
         self.wifi_scanning = False
         self.wifi_ssid = ""
         self.wifi_password = ""
-        self.password_group = 0
-        self.password_char = 0
-        self.password_level = 0
+        self.wifi_char_idx = 0
 
         self.weather_updating = False
         postal = self.config.get("location", {}).get("postal_code", "00000")
@@ -223,12 +227,7 @@ class AlarmClockApp:
         elif self.state == State.WIFI_SCAN:
             self.wifi_index = (self.wifi_index + delta) % max(1, len(self.wifi_networks))
         elif self.state == State.WIFI_PASSWORD:
-            if self.password_level == 0:
-                self.password_group = (self.password_group + delta) % len(PASSWORD_GROUPS)
-                self.password_char = 0
-            else:
-                chars = PASSWORD_GROUPS[self.password_group]
-                self.password_char = (self.password_char + delta) % len(chars)
+            self.wifi_char_idx = (self.wifi_char_idx + delta) % len(WIFI_CHARS)
         elif self.state == State.LOCATION:
             self.location_digits[self.location_digit_idx] = (self.location_digits[self.location_digit_idx] + delta) % 10
         elif self.state == State.ALARM_RINGING:
@@ -254,12 +253,16 @@ class AlarmClockApp:
             if self.wifi_networks:
                 self.wifi_ssid = self.wifi_networks[self.wifi_index].get("ssid", "")
                 self.wifi_password = ""
-                self.password_group = 0
-                self.password_char = 0
-                self.password_level = 0
+                self.wifi_char_idx = 0
                 self.state = State.WIFI_PASSWORD
         elif self.state == State.WIFI_PASSWORD:
-            self._password_press()
+            ch = WIFI_CHARS[self.wifi_char_idx]
+            if ch == "OK":
+                self._connect_wifi()
+            elif ch == "DEL":
+                self.wifi_password = self.wifi_password[:-1]
+            else:
+                self.wifi_password += ch
         elif self.state == State.LOCATION:
             if self.location_digit_idx < 4:
                 self.location_digit_idx += 1
@@ -281,9 +284,7 @@ class AlarmClockApp:
             self._save_brightness()
             self.state = State.CLOCK
         elif self.state == State.WIFI_PASSWORD:
-            if self.password_level == 1:
-                self.password_level = 0
-            elif self.wifi_password:
+            if self.wifi_password:
                 self.wifi_password = self.wifi_password[:-1]
             else:
                 self.state = State.WIFI_SCAN
@@ -335,20 +336,7 @@ class AlarmClockApp:
             self._save_alarm()
             self.state = State.CLOCK
 
-    def _password_press(self):
-        group = PASSWORD_GROUPS[self.password_group]
-        if self.password_level == 0 and group == "OK":
-            self._connect_wifi()
-            return
-        if self.password_level == 0 and group == "<":
-            self.wifi_password = self.wifi_password[:-1]
-            return
-        if self.password_level == 0:
-            self.password_level = 1
-            self.password_char = 0
-        else:
-            self.wifi_password += group[self.password_char]
-            self.password_level = 0
+
 
     def _save_alarm(self):
         self.config["alarm"] = self.alarm
@@ -588,9 +576,10 @@ class AlarmClockApp:
             return self.ui_round.render_focus("WiFi", sub, "wifi", value[:16])
 
         if self.state == State.WIFI_PASSWORD:
-            return self.ui_round.render_focus(
-                "Contrasena", self.wifi_ssid[:16], "wifi",
-                "*" * min(len(self.wifi_password), 8))
+            ch = WIFI_CHARS[self.wifi_char_idx]
+            disp = {"OK": "CONECTAR", "DEL": "BORRAR", " ": "ESPACIO"}.get(ch, ch)
+            sub = f"{len(self.wifi_password)} car. | largo=borrar"
+            return self.ui_round.render_focus("WiFi clave", sub, "wifi", disp)
 
         if self.state == State.LOCATION:
             postal_str = "".join(str(d) for d in self.location_digits)
@@ -625,10 +614,8 @@ class AlarmClockApp:
             return self.ui_rect.render_wifi_keyboard(
                 self.wifi_ssid,
                 self.wifi_password,
-                PASSWORD_GROUPS,
-                self.password_group,
-                self.password_char,
-                self.password_level,
+                WIFI_CHARS,
+                self.wifi_char_idx,
             )
         if self.state == State.LOCATION:
             return self.ui_rect.render_location(self.location_digits, self.location_digit_idx, self.location_updating)

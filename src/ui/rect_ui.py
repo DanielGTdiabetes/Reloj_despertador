@@ -183,18 +183,79 @@ class RectUIScreen:
         return img
 
     def render_wifi_scan(self, nets, index, scanning) -> Image.Image:
-        img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
-        if scanning: _text_center_x(draw, 28, "BUSCANDO REDES...", F.menu_label, CYAN, 0, W)
-        elif nets:
-            draw.rounded_rectangle([30, 8, W-30, H-8], radius=10, fill=DARK_CARD)
-            _text_center_x(draw, 32, nets[index].get("ssid", "")[:22], F.menu_label, WHITE, 0, W)
+        img = Image.new("RGB", (W, H), BG)
+        draw = ImageDraw.Draw(img)
+        if scanning:
+            _text_center_x(draw, 30, "BUSCANDO REDES...", F.menu_label, CYAN, 0, W)
+            return img
+        if not nets:
+            _text_center_x(draw, 30, "Sin redes", F.menu_label, DIM_WHITE, 0, W)
+            return img
+        # Mostrar hasta 3 redes: la seleccionada en el centro
+        for slot, offset in enumerate([-1, 0, 1]):
+            i = (index + offset) % len(nets)
+            net = nets[i]
+            is_sel = (offset == 0)
+            ry = 6 + slot * 22
+            if is_sel:
+                draw.rounded_rectangle([8, ry, W-8, ry+20], radius=5,
+                                       fill=DARK_CARD, outline=CYAN, width=2)
+                draw.text((18, ry+4), net["ssid"][:28], font=F.menu_label, fill=WHITE)
+                # Barras de señal a la derecha
+                bars = net.get("signal", 0)
+                for b in range(4):
+                    bx = W - 30 + b * 6
+                    bh = 4 + b * 3
+                    col = CYAN if b < bars else (30, 40, 55)
+                    draw.rectangle([bx, ry+18-bh, bx+4, ry+18], fill=col)
+            else:
+                col = (55, 65, 80)
+                draw.text((18, ry+4), net["ssid"][:28], font=F.small, fill=col)
         return img
 
-    def render_wifi_keyboard(self, ssid, password, groups, group, char, level) -> Image.Image:
-        img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
-        draw.rectangle([20, 22, W-20, 42], outline=WHITE, width=1)
-        draw.text((24, 25), password[:22], font=F.menu_label, fill=WHITE)
-        _text_center_x(draw, 50, groups[group], F.menu_label, PURPLE, 0, W)
+    def render_wifi_keyboard(self, ssid, password, chars, char_idx) -> Image.Image:
+        img = Image.new("RGB", (W, H), BG)
+        draw = ImageDraw.Draw(img)
+
+        # --- Fila superior: red + contraseña escrita ---
+        draw.text((8, 4), f"{ssid[:14]}:", font=F.small, fill=DIM_WHITE)
+        # Mostrar últimos 18 chars de la contraseña + cursor parpadeante
+        cursor = "|" if int(time.time() * 2) % 2 == 0 else " "
+        pwd_show = (password[-18:] if len(password) > 18 else password) + cursor
+        draw.text((8, 18), pwd_show, font=F.menu_label, fill=WHITE)
+
+        # --- Separador ---
+        draw.line([8, 33, W - 8, 33], fill=(28, 36, 52), width=1)
+
+        # --- Cinta de caracteres: 7 visibles, 36px cada uno ---
+        VISIBLE, SW = 7, 36
+        ox = (W - VISIBLE * SW) // 2   # margen ~8px
+        TY1, TY2 = 37, H - 4           # y=37..72 → 35px de alto
+
+        for slot in range(VISIBLE):
+            off = slot - VISIBLE // 2   # -3..+3
+            idx = (char_idx + off) % len(chars)
+            ch = chars[idx]
+            sx = ox + slot * SW
+            label = {"OK": "OK", "DEL": "DEL", " ": "SPC"}.get(ch, ch)
+            is_center = (off == 0)
+
+            if is_center:
+                if ch == "OK":
+                    bg, outline, tc = (0, 28, 10), (0, 180, 60), (0, 210, 70)
+                elif ch == "DEL":
+                    bg, outline, tc = (38, 18, 0), AMBER, AMBER
+                else:
+                    bg, outline, tc = DARK_CARD, CYAN, WHITE
+                draw.rounded_rectangle([sx + 1, TY1, sx + SW - 2, TY2],
+                                       radius=5, fill=bg, outline=outline, width=2)
+                _text_center_x(draw, TY1 + (TY2 - TY1 - 13) // 2,
+                               label, F.menu_label, tc, sx, sx + SW)
+            else:
+                dist = abs(off)
+                col = (65, 80, 100) if dist == 1 else (38, 48, 62)
+                _text_center_x(draw, TY1 + (TY2 - TY1 - 12) // 2,
+                               label, F.small, col, sx, sx + SW)
         return img
 
     def render_ringing(self, title, option) -> Image.Image:
