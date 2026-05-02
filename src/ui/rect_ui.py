@@ -7,7 +7,7 @@ import time
 import math
 from PIL import Image, ImageDraw
 from .theme import (
-    F, CYAN, PURPLE, BG, WHITE, DIM_WHITE,
+    F, CYAN, PURPLE, BG, WHITE, DIM_WHITE, AMBER,
     DARK_CARD, GRADIENTS, ICONS, condition_to_icon_file,
     draw_menu_icon
 )
@@ -92,29 +92,56 @@ class RectUIScreen:
             _text_center_x(draw, 28, str(digit), F.clock, CYAN if is_active else WHITE, x, x+box_w)
         return img
 
-    def render_alarm(self, alarm, field) -> Image.Image:
-        img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
+    def render_alarm(self, alarm, field, editing=False) -> Image.Image:
+        img = Image.new("RGB", (W, H), BG)
+        draw = ImageDraw.Draw(img)
         enabled = alarm.get("enabled", False)
-        
-        # Recuadro centrado
-        draw.rounded_rectangle([20, 10, W-20, H-10], radius=12, fill=DARK_CARD)
-        
-        # Estado ON/OFF a la izquierda
-        col_st = AMBER if enabled else DIM_WHITE
-        draw.text((35, 28), "ON" if enabled else "OFF", font=F.card_day, fill=col_st)
-        
-        # Hora con fuente de 40px
-        time_str = f"{alarm.get('hour',7):02d}:{alarm.get('minute',0):02d}"
-        _text_center_x(draw, 18, time_str, F.alarm_rect, WHITE, 0, W)
-        
-        # Indicador de edición
-        if field == "hour":
-            draw.line([W//2 - 45, H-15, W//2 - 5, H-15], fill=CYAN, width=3)
-        elif field == "minute":
-            draw.line([W//2 + 5, H-15, W//2 + 45, H-15], fill=CYAN, width=3)
-        elif field == "enabled":
-            draw.line([30, H-15, 60, H-15], fill=CYAN, width=3)
-            
+
+        # Tres cajas: [ON/OFF]  [HH] : [MM]
+        # Layout centrado en 284px
+        B1W, B2W, B3W, COLON_W, GAP1 = 70, 62, 62, 14, 12
+        total = B1W + GAP1 + B2W + COLON_W + B3W   # 220px
+        ox = (W - total) // 2                        # ~32px margen
+        BY1, BY2, BRAD = 7, H - 7, 9                # y1=7, y2=69 → 62px alto
+
+        b1x = ox
+        b2x = ox + B1W + GAP1
+        cx  = b2x + B2W                              # inicio zona colon
+        b3x = cx + COLON_W
+
+        def _box(bx, bw, f_name):
+            active = (field == f_name)
+            if active and editing:
+                fill, outline, lw = (45, 25, 0), AMBER, 2
+            elif active:
+                fill, outline, lw = DARK_CARD, CYAN, 2
+            else:
+                fill, outline, lw = (12, 16, 24), (35, 45, 60), 1
+            draw.rounded_rectangle([bx, BY1, bx + bw, BY2],
+                                   radius=BRAD, fill=fill, outline=outline, width=lw)
+
+        _box(b1x, B1W, "enabled")
+        _box(b2x, B2W, "hour")
+        _box(b3x, B3W, "minute")
+
+        # ON/OFF
+        st_text = "ON" if enabled else "OFF"
+        st_col = AMBER if enabled else DIM_WHITE
+        if field == "enabled":
+            st_col = WHITE
+        txt_y1 = BY1 + (BY2 - BY1 - 26) // 2
+        _text_center_x(draw, txt_y1, st_text, F.temp_big, st_col, b1x, b1x + B1W)
+
+        # Hora y minutos (40px)
+        txt_y2 = BY1 + (BY2 - BY1 - 40) // 2
+        h_col  = AMBER if (field == "hour"   and editing) else WHITE
+        m_col  = AMBER if (field == "minute" and editing) else WHITE
+        _text_center_x(draw, txt_y2, f"{alarm.get('hour', 7):02d}",   F.alarm_rect, h_col, b2x, b2x + B2W)
+        _text_center_x(draw, txt_y2, f"{alarm.get('minute', 0):02d}", F.alarm_rect, m_col, b3x, b3x + B3W)
+
+        # Dos puntos entre hora y minutos
+        _text_center_x(draw, txt_y2, ":", F.alarm_rect, DIM_WHITE, cx, cx + COLON_W)
+
         return img
 
     def render_brightness(self, r, rect, target) -> Image.Image:

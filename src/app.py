@@ -67,6 +67,7 @@ class AlarmClockApp:
         self.alarm.setdefault("minute", 0)
         self.alarm.setdefault("days", list(range(7)))
         self.alarm_field = "enabled"
+        self.alarm_editing = False
         self.last_alarm_key = None
         self.ring_option = 0
         self.snoozed_until = 0
@@ -196,13 +197,17 @@ class AlarmClockApp:
         if self.state == State.MENU:
             self.menu_index = (self.menu_index + delta) % len(MENU_ITEMS)
         elif self.state == State.ALARM:
-            if self.alarm_field == "enabled":
-                # Giro a la derecha activa, giro a la izquierda desactiva
-                self.alarm["enabled"] = (delta > 0)
-            elif self.alarm_field == "hour":
-                self.alarm["hour"] = (int(self.alarm.get("hour", 7)) + delta) % 24
-            elif self.alarm_field == "minute":
-                self.alarm["minute"] = (int(self.alarm.get("minute", 0)) + delta) % 60
+            if self.alarm_editing:
+                if self.alarm_field == "enabled":
+                    self.alarm["enabled"] = (delta > 0)
+                elif self.alarm_field == "hour":
+                    self.alarm["hour"] = (int(self.alarm.get("hour", 7)) + delta) % 24
+                elif self.alarm_field == "minute":
+                    self.alarm["minute"] = (int(self.alarm.get("minute", 0)) + delta) % 60
+            else:
+                fields = ["enabled", "hour", "minute"]
+                idx = fields.index(self.alarm_field)
+                self.alarm_field = fields[(idx + delta) % len(fields)]
         elif self.state == State.BRIGHTNESS:
             if self.brightness_target == "round":
                 self.brightness_round = max(0, min(100, self.brightness_round + delta * 5))
@@ -236,7 +241,7 @@ class AlarmClockApp:
         elif self.state == State.MENU:
             self._select_menu()
         elif self.state == State.ALARM:
-            self._advance_alarm_field()
+            self.alarm_editing = not self.alarm_editing
         elif self.state == State.BRIGHTNESS:
             self.brightness_target = "rect" if self.brightness_target == "round" else "round"
         elif self.state == State.WIFI_SCAN:
@@ -290,6 +295,7 @@ class AlarmClockApp:
         key = MENU_ITEMS[self.menu_index][0]
         if key == "alarm_clock":
             self.alarm_field = "enabled"
+            self.alarm_editing = False
             self.state = State.ALARM
         elif key == "brightness":
             self.brightness_target = "round"
@@ -555,7 +561,9 @@ class AlarmClockApp:
 
         if self.state == State.ALARM:
             value = f"{self.alarm.get('hour', 7):02d}:{self.alarm.get('minute', 0):02d}"
-            sub   = "ON" if self.alarm.get("enabled") else "OFF"
+            field_names = {"enabled": "ON/OFF", "hour": "HORA", "minute": "MIN"}
+            field_label = field_names.get(self.alarm_field, "")
+            sub = f"Editando {field_label}" if self.alarm_editing else f"Selec: {field_label}"
             return self.ui_round.render_focus("Alarma", sub, "alarm_clock", value)
 
         if self.state == State.BRIGHTNESS:
@@ -602,7 +610,7 @@ class AlarmClockApp:
                 dynamic_items.append((key, label))
             return self.ui_rect.render_menu(dynamic_items, self.menu_index)
         if self.state == State.ALARM:
-            return self.ui_rect.render_alarm(self.alarm, self.alarm_field)
+            return self.ui_rect.render_alarm(self.alarm, self.alarm_field, self.alarm_editing)
         if self.state == State.BRIGHTNESS:
             return self.ui_rect.render_brightness(self.brightness_round, self.brightness_rect, self.brightness_target)
         if self.state == State.WIFI_SCAN:
