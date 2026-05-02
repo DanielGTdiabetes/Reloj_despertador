@@ -35,9 +35,9 @@ class RectUIScreen:
     @staticmethod
     def _period_theme(period: str):
         if period == "sunrise":
-            return (18, 10, 4), (32, 22, 8), (70, 45, 15)
+            return (55, 28, 5), (80, 45, 10), (200, 120, 30)
         if period == "sunset":
-            return (18, 6, 14), (34, 16, 10), (70, 30, 15)
+            return (55, 15, 25), (80, 28, 18), (200, 75, 40)
         return BG, (20, 22, 28), (40, 45, 55)
 
     def render_forecast(self, forecast_data: list, period: str = "day") -> Image.Image:
