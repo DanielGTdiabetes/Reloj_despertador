@@ -25,8 +25,7 @@ apply_fix.py
 final_fix.py
 quick_fix.py
 temp_log.txt
-*.png
-*.txt
+# *.png y *.txt NO ignorados — los assets y docs se commitean
 
 # IDEs
 .vscode/

@@ -64,7 +64,7 @@ class ST7789Display:
         self,
         spi_port: int = 0,
         spi_device: int = 1,
-        cs_pin: int = 7,
+        cs_pin: int = 16,
         dc_pin: int = 22,
         rst_pin: int = 27,
         bl_pin: int = 23,

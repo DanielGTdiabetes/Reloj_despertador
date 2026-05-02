@@ -2,17 +2,19 @@
 
 ## Resumen
 
-Ambas pantallas usan SPI0:
+Ambas pantallas usan SPI0 con CS manual por GPIO:
 
-- GC9A01 redonda en CE0, GPIO8.
-- ST7789P3 rectangular en CE1, GPIO7.
+- GC9A01 redonda: CS en GPIO8 (CE0 hardware).
+- ST7789P3 rectangular: CS en **GPIO16, pin físico 36** (GPIO normal, NO CE hardware).
 
 > [!IMPORTANT]
-> **CONFIGURACIÓN CRÍTICA DEL BUS:** 
-> La pantalla redonda DEBE usar `spi_device: 0` y la rectangular DEBE usar `spi_device: 1`. 
-> Intentar poner ambas en `device: 0` (incluso con CS manual) causa interferencias en el bus SPI0 que dejan la pantalla rectangular en blanco.
-
-Esto deja libres los GPIO18, GPIO19 y GPIO21 para el audio I2S MAX98357A.
+> **CAMBIO CRÍTICO 2026-05-02:** El CS del ST7789 se movió de GPIO7 (pin 26, CE1) a
+> **GPIO16 (pin 36, GPIO normal)**. GPIO7 causaba un glitch en cold boot porque el
+> kernel lo inicializa como CE1 al cargar el overlay SPI aunque no lo usemos.
+> Con GPIO16 el kernel no lo toca y el bug de pantalla blanca en cold boot desaparece.
+>
+> El overlay de boot es ahora `dtoverlay=spi0-1cs` (solo expone CE0).
+> Ambas pantallas usan `spi_device: 0` porque solo existe `/dev/spidev0.0`.
 
 ## GC9A01 - Pantalla Redonda 240x240
 
@@ -33,6 +35,7 @@ Config:
 {
   "spi_port": 0,
   "spi_device": 0,
+  "cs_pin": 8,
   "dc_pin": 25,
   "rst_pin": 26,
   "bl_pin": null
@@ -47,7 +50,7 @@ Config:
 | GND | - | 20 | GND |
 | MOSI | GPIO10 | 19 | Compartido con GC9A01 |
 | SCK | GPIO11 | 23 | Compartido con GC9A01 |
-| CS | GPIO7 | 26 | SPI0 CE1 |
+| CS | **GPIO16** | **36** | GPIO normal, NO CE hardware |
 | DC | GPIO22 | 15 | Data/command |
 | RST | GPIO27 | 13 | Reset |
 | BL | GPIO23 | 16 | Backlight activo LOW |
@@ -57,8 +60,8 @@ Config:
 ```json
 {
   "spi_port": 0,
-  "spi_device": 1,
-  "cs_pin": 7,
+  "spi_device": 0,
+  "cs_pin": 16,
   "dc_pin": 22,
   "rst_pin": 27,
   "bl_pin": 23,
@@ -72,8 +75,8 @@ Parametros criticos del driver:
 | Parametro | Valor |
 |---|---:|
 | Tamano logico | 284x76 |
-| SPI | spi0.1 |
-| Velocidad | 4 MHz |
+| SPI | spi0.0 (unico device) |
+| Velocidad | 32 MHz |
 | Secuencia init | BuyDisplay / ER-TFTM2.25-1 |
 | MADCTL | 0xA8 |
 | COLMOD | 0x05 |
@@ -107,20 +110,16 @@ fallaba bajo systemd en esta instalacion.
 
 ## /boot/firmware/config.txt
 
-Estado esperado:
+Estado correcto (tras fix cold boot):
 
 ```ini
-dtparam=spi=on
-dtparam=i2s=on
+dtoverlay=spi0-1cs
+dtparam=i2c_arm=on
 dtoverlay=max98357a
+camera_auto_detect=0
+display_auto_detect=0
 ```
 
-No usar:
-
-```ini
-dtparam=audio=on
-dtoverlay=spi1-3cs
-```
-
-Motivo: SPI1 comparte GPIO21 con PCM_DOUT. Si SPI1 se activa, entra en
-conflicto con el MAX98357A. Por eso las dos pantallas van en SPI0.
+No usar `dtparam=spi=on` — activa CE0 y CE1, y el kernel toca GPIO7 en boot.
+No usar `dtoverlay=spi0-2cs` — mismo problema.
+No usar `dtoverlay=spi1-3cs` — GPIO21 en conflicto con PCM_DOUT del MAX98357A.

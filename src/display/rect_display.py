@@ -14,7 +14,7 @@ class RectDisplay:
         self._display = ST7789Display(
             spi_port=self._cfg.get("spi_port", 0),
             spi_device=self._cfg.get("spi_device", 1),
-            cs_pin=self._cfg.get("cs_pin", 7),
+            cs_pin=self._cfg.get("cs_pin", 16),
             dc_pin=self._cfg.get("dc_pin", 22),
             rst_pin=self._cfg.get("rst_pin", 27),
             bl_pin=self._cfg.get("bl_pin", 23),
