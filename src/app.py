@@ -674,7 +674,7 @@ class AlarmClockApp:
         while self.running:
             self._process_events()
             now = time.time()
-            if now - last_render >= 1.0:
+            if now - last_render >= 0.2:
                 self._render()
                 self.tick += 1
                 last_render = now

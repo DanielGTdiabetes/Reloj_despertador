@@ -20,16 +20,25 @@ def _text_center(draw, y, text, font, fill):
     draw.text(((W - (bb[2]-bb[0])) // 2, y), text, font=font, fill=fill)
 
 class RoundHomeScreen:
-    def _draw_solar_arc(self, draw, sun_info):
-        progress = sun_info.get("progress", 0.5)
-        box = [CX-ARC_R, CY-ARC_R, CX+ARC_R, CY+ARC_R]
-        draw.arc(box, start=-90, end=270, fill=(20, 25, 45), width=ARC_THICK)
-        draw.arc(box, start=90, end=270, fill=PURPLE, width=ARC_THICK)
-        end_angle = -90 + int(180 * max(0, min(1, progress)))
-        draw.arc(box, start=-90, end=end_angle, fill=CYAN, width=ARC_THICK)
-        rad = math.radians(end_angle)
-        sx, sy = CX + ARC_R * math.cos(rad), CY + ARC_R * math.sin(rad)
-        draw.ellipse([sx-5, sy-5, sx+5, sy+5], fill=(255, 200, 60))
+    def _draw_seconds_ring(self, draw):
+        # Usa time.time() para fracción de segundo → barrido suave a 5 FPS
+        seconds = time.time() % 60.0
+        angle = -90.0 + (seconds / 60.0) * 360.0
+
+        box = [CX - ARC_R, CY - ARC_R, CX + ARC_R, CY + ARC_R]
+
+        # Anillo base muy oscuro
+        draw.arc(box, start=0, end=360, fill=(18, 22, 38), width=ARC_THICK)
+
+        # Cola: últimos ~8 segundos (48°) en cyan tenue
+        tail_start = int(angle) - 48
+        draw.arc(box, start=tail_start, end=int(angle), fill=(0, 80, 130), width=ARC_THICK)
+
+        # Punto brillante en la punta
+        rad = math.radians(angle)
+        sx = CX + ARC_R * math.cos(rad)
+        sy = CY + ARC_R * math.sin(rad)
+        draw.ellipse([sx - 5, sy - 5, sx + 5, sy + 5], fill=CYAN)
 
     def _draw_sidebar_alarm(self, img, alarm):
         enabled = alarm.get("enabled", False)
@@ -53,7 +62,7 @@ class RoundHomeScreen:
     def render(self, now, weather, sun_info, moon, alarm, status) -> Image.Image:
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
-        self._draw_solar_arc(draw, sun_info)
+        self._draw_seconds_ring(draw)
 
         # 1. Fecha
         d_es = ["LUN", "MAR", "MIE", "JUE", "VIE", "SAB", "DOM"]
@@ -92,7 +101,7 @@ class RoundHomeScreen:
     def render_night(self, now, moon, alarm, sun_info=None) -> Image.Image:
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
-        self._draw_solar_arc(draw, sun_info or {"period":"night", "progress":-1})
+        self._draw_seconds_ring(draw)
         _text_center(draw, 45, now.strftime("%H:%M"), F.clock, WHITE)
         draw_moon(img, CX, CY + 35, r=35, phase_frac=moon.get("phase", 0.5))
         return img
