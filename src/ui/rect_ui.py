@@ -80,16 +80,42 @@ class RectUIScreen:
                 draw_menu_icon(draw, x1+(item_w-24)//2, 22, 24, items[i][0])
         return img
 
-    def render_location(self, digits, active_idx, updating=False) -> Image.Image:
-        img = Image.new("RGB", (W, H), BG); draw = ImageDraw.Draw(img)
-        _text_center_x(draw, 6, "CÓDIGO POSTAL", F.small, CYAN, 0, W)
-        box_w, box_h = 30, 38
-        x_start = (W - (box_w*5 + 24)) // 2
+    def render_location(self, digits, active_idx, updating=False, editing=False) -> Image.Image:
+        img = Image.new("RGB", (W, H), BG)
+        draw = ImageDraw.Draw(img)
+
+        if updating:
+            _text_center_x(draw, 28, "Geolocalizando...", F.menu_label, CYAN, 0, W)
+            return img
+
+        _text_center_x(draw, 4, "CODIGO POSTAL", F.small, DIM_WHITE, 0, W)
+
+        # 5 cajas centradas en 284px
+        BW, BH, BGAP = 40, 46, 8
+        total = BW * 5 + BGAP * 4      # 232px
+        ox = (W - total) // 2          # ~26px margen
+        BY1 = 18
+
         for i, digit in enumerate(digits[:5]):
-            x = x_start + i * (box_w + 6)
-            is_active = (i == active_idx) and not updating
-            draw.rounded_rectangle([x, 22, x+box_w, 60], radius=5, fill=(20,40,60) if is_active else (15,20,30), outline=CYAN if is_active else (50,70,90), width=2)
-            _text_center_x(draw, 28, str(digit), F.clock, CYAN if is_active else WHITE, x, x+box_w)
+            bx = ox + i * (BW + BGAP)
+            is_cursor = (i == active_idx)
+            is_edit   = is_cursor and editing
+
+            if is_edit:
+                fill, outline, lw = (45, 25, 0), AMBER, 2
+                tc = AMBER
+            elif is_cursor:
+                fill, outline, lw = DARK_CARD, CYAN, 2
+                tc = WHITE
+            else:
+                fill, outline, lw = (12, 16, 24), (35, 45, 60), 1
+                tc = DIM_WHITE
+
+            draw.rounded_rectangle([bx, BY1, bx + BW, BY1 + BH],
+                                   radius=7, fill=fill, outline=outline, width=lw)
+            # Dígito centrado — F.date_top = 20px bold, cabe en 40×46 sin problemas
+            _text_center_x(draw, BY1 + (BH - 20) // 2, str(digit), F.date_top, tc, bx, bx + BW)
+
         return img
 
     def render_alarm(self, alarm, field, editing=False) -> Image.Image:

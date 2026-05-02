@@ -617,7 +617,7 @@ class AlarmClockApp:
                 self.wifi_char_idx,
             )
         if self.state == State.LOCATION:
-            return self.ui_rect.render_location(self.location_digits, self.location_digit_idx, self.location_updating)
+            return self.ui_rect.render_location(self.location_digits, self.location_digit_idx, self.location_updating, self.location_editing)
         if self.state == State.ALARM_RINGING:
             return self.ui_rect.render_ringing("Despertador", self.ring_option)
         return None
