@@ -1,17 +1,33 @@
 # Pi Zero W -- Reloj Despertador
 # /boot/firmware/config.txt
 # Copia de referencia — actualizar aquí si se cambia algo en la Pi
-# Última validación: 2026-05-02
+# Última validación: 2026-05-03
 
+# ── Hardware SPI ────────────────────────────────────────────────────────────
 # SPI0: GC9A01 en spi0.0 (CE0/GPIO8), ST7789 en spi0.1 (CE1/GPIO7)
 dtparam=spi=on
 
-# I2C
+# ── I2C ─────────────────────────────────────────────────────────────────────
 dtparam=i2c_arm=on
 
-# Audio I2S MAX98357A -- NO habilitar SPI1 (conflicto con I2S)
+# ── Audio I2S MAX98357A ──────────────────────────────────────────────────────
+# NO habilitar SPI1: entra en conflicto con I2S
 dtoverlay=max98357a
 
-# Headless
+# ── Watchdog hardware (BCM2835) ──────────────────────────────────────────────
+# Activa /dev/watchdog. systemd lo consume vía WatchdogSec= en el servicio.
+# Si la app cuelga más de 90s sin pingar, el SoC fuerza reset hardware.
+dtoverlay=watchdog=on
+
+# ── Headless ─────────────────────────────────────────────────────────────────
 camera_auto_detect=0
 display_auto_detect=0
+
+# ── Boot rápido ──────────────────────────────────────────────────────────────
+# Sin splash arcoíris ni retraso artificial
+disable_splash=1
+boot_delay=0
+
+# GPU memory mínima: no usamos framebuffer HDMI
+# Libera ~48 MB de RAM para el proceso Python
+gpu_mem=16
