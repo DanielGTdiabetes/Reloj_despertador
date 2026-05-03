@@ -487,6 +487,7 @@ class AlarmClockApp:
         self.state = State.ALARM_RINGING
         self.ring_option = 0
         self.status = "Alarma"
+        self._alarm_started_at = time.time()
         sounds = self.config.get("audio", {}).get("alarm_sounds", [])
         if self.audio and sounds:
             path = sounds[0]
@@ -510,7 +511,11 @@ class AlarmClockApp:
 
     def _render(self):
         now = self.clock.now()
-        if self.state not in (State.ALARM_RINGING, State.ALARM):
+        if self.state == State.ALARM_RINGING:
+            if time.time() - getattr(self, "_alarm_started_at", time.time()) >= 8 * 60:
+                self._stop_alarm()
+                self.status = "Alarma auto-apagada"
+        elif self.state != State.ALARM:
             self._check_alarm(now)
 
         round_img = self._render_round(now)
