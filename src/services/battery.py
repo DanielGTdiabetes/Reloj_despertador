@@ -1,0 +1,239 @@
+"""
+battery.py — Servicio de monitoreo de batería para DFR0528 UPS HAT
+
+Responsabilidades:
+  - Lectura periódica en hilo daemon (cada POLL_INTERVAL segundos en estado normal,
+    cada CRITICAL_INTERVAL en estado crítico/apagado).
+  - Clasificación del nivel de batería: ok | warning | critical | shutdown.
+  - Callbacks configurables:
+      on_low_battery(level, pct)   → llamado en warning/critical
+      on_shutdown_required()       → llamado una sola vez cuando SOC ≤ shutdown_threshold
+  - Apagado seguro real: tras SHUTDOWN_DELAY segundos ejecuta "sudo shutdown -h now".
+
+Si enabled=False (configuración por defecto hasta tener el hardware), el servicio
+no intenta abrir el bus I2C y todos los getters devuelven None. La aplicación
+funciona con normalidad sin mostrar nada en pantalla.
+"""
+
+from __future__ import annotations
+
+import logging
+import subprocess
+import threading
+import time
+
+log = logging.getLogger(__name__)
+
+# ── Constantes de comportamiento ─────────────────────────────────────────────
+
+POLL_INTERVAL      = 30    # segundos entre lecturas en estado normal
+CRITICAL_INTERVAL  =  5    # segundos en estado crítico / shutdown
+WARNING_THRESHOLD  = 20.0  # %  — nivel "warning" (aviso visual + status)
+CRITICAL_THRESHOLD = 10.0  # %  — nivel "critical" (aviso urgente)
+SHUTDOWN_THRESHOLD =  2.0  # %  — nivel "shutdown" (apagado seguro inmediato)
+SHUTDOWN_DELAY     = 10    # segundos de margen antes de ejecutar shutdown
+
+
+class BatteryService:
+    """Gestiona la lectura y supervisión del DFR0528 UPS HAT.
+
+    Uso típico en app.py:
+
+        self.battery = BatteryService(
+            enabled=cfg.get("ups", {}).get("enabled", False),
+            bus=cfg.get("ups", {}).get("i2c_bus", 1),
+            address=cfg.get("ups", {}).get("i2c_address", 0x10),
+            on_low_battery=self._on_battery_low,
+            on_shutdown_required=self._on_battery_shutdown,
+        )
+        self.battery.start()      # no-op si enabled=False o HAT no presente
+
+        # En render:
+        state = self.battery.get_state()   # None si no disponible
+    """
+
+    def __init__(
+        self,
+        enabled: bool = False,
+        bus: int = 1,
+        address: int = 0x10,
+        warning_threshold: float  = WARNING_THRESHOLD,
+        critical_threshold: float = CRITICAL_THRESHOLD,
+        shutdown_threshold: float = SHUTDOWN_THRESHOLD,
+        on_low_battery=None,        # callable(level: str, pct: float) | None
+        on_shutdown_required=None,  # callable() | None
+    ) -> None:
+        self.enabled  = enabled
+        self._bus_id  = bus
+        self._address = address
+
+        self._warn_thr  = warning_threshold
+        self._crit_thr  = critical_threshold
+        self._shut_thr  = shutdown_threshold
+
+        self._on_low  = on_low_battery
+        self._on_shut = on_shutdown_required
+
+        # Estado interno (protegido por _lock)
+        self._lock     = threading.Lock()
+        self._soc: float | None   = None
+        self._volts: float | None = None   # mV
+        self._level: str          = "unknown"
+
+        self._hat     = None
+        self._thread: threading.Thread | None = None
+        self._running = False
+        self._shutdown_triggered = False
+
+    # ── Ciclo de vida ────────────────────────────────────────────────────────
+
+    def start(self) -> bool:
+        """Inicia el hilo de monitoreo.
+
+        Returns:
+            True  — HAT encontrado, monitoreo activo.
+            False — desactivado por config o HAT no presente (no es un error fatal).
+        """
+        if not self.enabled:
+            log.info("[Battery] servicio desactivado por config (ups.enabled=false)")
+            return False
+
+        try:
+            from hardware.ups_hat import UPSHat
+            hat = UPSHat(bus=self._bus_id, address=self._address)
+            hat.open()
+            ver = hat.read_version()
+            self._hat = hat
+            log.info("[Battery] UPS HAT OK — firmware %s", ver)
+        except Exception as exc:
+            log.warning("[Battery] HAT no disponible: %s", exc)
+            return False
+
+        self._running = True
+        self._thread  = threading.Thread(
+            target=self._loop, daemon=True, name="battery-monitor"
+        )
+        self._thread.start()
+        return True
+
+    def stop(self) -> None:
+        """Detiene el hilo de monitoreo y cierra el bus I2C."""
+        self._running = False
+        if self._hat is not None:
+            try:
+                self._hat.close()
+            except Exception:
+                pass
+
+    # ── Getters thread-safe ──────────────────────────────────────────────────
+
+    @property
+    def available(self) -> bool:
+        """True si el HAT está presente y el hilo de monitoreo activo."""
+        return self._hat is not None
+
+    @property
+    def soc(self) -> float | None:
+        """Porcentaje de carga, o None si no disponible."""
+        with self._lock:
+            return self._soc
+
+    @property
+    def voltage_mv(self) -> float | None:
+        """Voltaje de batería en mV, o None si no disponible."""
+        with self._lock:
+            return self._volts
+
+    @property
+    def level(self) -> str:
+        """Nivel actual: 'ok' | 'warning' | 'critical' | 'shutdown' | 'unknown'."""
+        with self._lock:
+            return self._level
+
+    def get_state(self) -> dict | None:
+        """Snapshot thread-safe del estado de batería.
+
+        Returns:
+            dict con claves 'soc', 'voltage_mv', 'level', o None si no disponible.
+        """
+        if not self.available:
+            return None
+        with self._lock:
+            if self._soc is None:
+                return None
+            return {
+                "soc":        self._soc,
+                "voltage_mv": self._volts,
+                "level":      self._level,
+            }
+
+    # ── Loop interno ─────────────────────────────────────────────────────────
+
+    def _loop(self) -> None:
+        """Hilo daemon: lee batería periódicamente y gestiona alertas."""
+        while self._running:
+            try:
+                soc   = self._hat.read_soc()
+                volts = self._hat.read_voltage_mv()
+                level = self._classify(soc)
+
+                with self._lock:
+                    self._soc   = soc
+                    self._volts = volts
+                    self._level = level
+
+                log.debug("[Battery] SOC=%.1f%%  V=%.0fmV  level=%s", soc, volts, level)
+                self._handle_level(level, soc)
+
+            except Exception as exc:
+                log.warning("[Battery] error de lectura I2C: %s", exc)
+
+            # Reducir intervalo cuando la batería está baja
+            interval = (
+                CRITICAL_INTERVAL
+                if self._level in ("critical", "shutdown")
+                else POLL_INTERVAL
+            )
+            time.sleep(interval)
+
+    def _classify(self, soc: float) -> str:
+        if soc <= self._shut_thr:
+            return "shutdown"
+        if soc <= self._crit_thr:
+            return "critical"
+        if soc <= self._warn_thr:
+            return "warning"
+        return "ok"
+
+    def _handle_level(self, level: str, soc: float) -> None:
+        # Notificar nivel bajo (warning / critical)
+        if level in ("warning", "critical") and self._on_low:
+            try:
+                self._on_low(level, soc)
+            except Exception as exc:
+                log.debug("[Battery] callback on_low_battery falló: %s", exc)
+
+        # Apagado seguro — se dispara una sola vez
+        if level == "shutdown" and not self._shutdown_triggered:
+            self._shutdown_triggered = True
+            log.critical(
+                "[Battery] SOC=%.1f%% ≤ %.1f%% — apagado seguro en %ds",
+                soc, self._shut_thr, SHUTDOWN_DELAY,
+            )
+            if self._on_shut:
+                try:
+                    self._on_shut()
+                except Exception as exc:
+                    log.debug("[Battery] callback on_shutdown_required falló: %s", exc)
+            threading.Thread(
+                target=self._do_shutdown, daemon=True, name="battery-shutdown"
+            ).start()
+
+    def _do_shutdown(self) -> None:
+        """Espera SHUTDOWN_DELAY segundos y ejecuta el apagado del sistema."""
+        time.sleep(SHUTDOWN_DELAY)
+        log.critical("[Battery] ejecutando: sudo shutdown -h now")
+        try:
+            subprocess.run(["sudo", "shutdown", "-h", "now"], check=True)
+        except Exception as exc:
+            log.error("[Battery] shutdown falló: %s", exc)

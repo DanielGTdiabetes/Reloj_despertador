@@ -118,7 +118,62 @@ class RoundHomeScreen:
             else:
                 draw.ellipse([x - r, y - r, x + r, y + r], fill=color)
 
-    def render(self, now, weather, sun_info, moon, alarm, status) -> Image.Image:
+    def _draw_battery_indicator(self, img, battery_state) -> None:
+        """Indicador de batería — lado derecho, simétrico al icono de alarma.
+
+        Posición: X=177, Y=148 (espejo de la alarma en X=63, Y=148).
+        Se dibuja solo si battery_state no es None (HAT presente y habilitado).
+
+        Geometría:
+          ┌──────────────────┬──┐
+          │ relleno SOC %    │+ │  ← cuerpo 22×12 + polo derecho 3×6
+          └──────────────────┴──┘
+                  85%             ← texto porcentaje debajo
+        """
+        if battery_state is None:
+            return
+
+        draw = ImageDraw.Draw(img)
+        soc   = battery_state.get("soc", 0) or 0
+        level = battery_state.get("level", "ok")
+
+        # Color según nivel de carga
+        if level == "shutdown":
+            # Parpadeo rojo crítico
+            col = (255, 40, 40) if int(time.time() * 2) % 2 == 0 else (100, 0, 0)
+        elif level == "critical":
+            col = (255, 80, 20)   # naranja intenso
+        elif level == "warning":
+            col = (255, 200, 0)   # amarillo
+        else:
+            col = (60, 200, 80)   # verde normal
+
+        # Centro del indicador (simétrico al icono de alarma)
+        bx, by = 177, 145
+
+        # Cuerpo de la batería: 22×12 px
+        bw, bh = 22, 12
+        x0, y0 = bx - bw // 2, by - bh // 2
+        x1, y1 = x0 + bw, y0 + bh
+        draw.rectangle([x0, y0, x1, y1], outline=col, width=1)
+
+        # Polo positivo (+): 3×6 px pegado a la derecha
+        px_w, px_h = 3, 6
+        draw.rectangle([x1 + 1, by - px_h // 2, x1 + px_w, by + px_h // 2], fill=col)
+
+        # Relleno interior proporcional al SOC
+        inner_w = bw - 4   # margen interior 2 px por lado
+        fill_w  = max(0, int(inner_w * min(100.0, soc) / 100.0))
+        if fill_w > 0:
+            draw.rectangle([x0 + 2, y0 + 2, x0 + 2 + fill_w, y1 - 2], fill=col)
+
+        # Texto porcentaje
+        pct_str = f"{soc:.0f}%"
+        bb = draw.textbbox((0, 0), pct_str, font=F.small)
+        tw = bb[2] - bb[0]
+        draw.text((bx - tw // 2, y1 + 3), pct_str, font=F.small, fill=col)
+
+    def render(self, now, weather, sun_info, moon, alarm, status, battery=None) -> Image.Image:
         period = sun_info.get("period", "day")
         th = self._period_theme(period)
 
@@ -155,8 +210,11 @@ class RoundHomeScreen:
         desc = (weather.get("description") or "").upper()
         draw_weather_icon(img, desc, CX, 152, size=50)
 
-        # Indicador de Alarma LATERAL
+        # Indicador de Alarma LATERAL (izquierda)
         self._draw_sidebar_alarm(img, alarm)
+
+        # Indicador de Batería LATERAL (derecha, simétrico a la alarma)
+        self._draw_battery_indicator(img, battery)
 
         # Desc y Temp
         _text_center(draw, 178, desc[:22], F.small, DIM_WHITE)
@@ -165,7 +223,7 @@ class RoundHomeScreen:
 
         return img
 
-    def render_night(self, now, moon, alarm, sun_info=None) -> Image.Image:
+    def render_night(self, now, moon, alarm, sun_info=None, battery=None) -> Image.Image:
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
 
@@ -185,6 +243,9 @@ class RoundHomeScreen:
         phase_name = moon.get("phase_name", "")
         if phase_name:
             _text_center(draw, 200, phase_name, F.small, PURPLE)
+
+        # Indicador de batería (modo noche — esquina derecha)
+        self._draw_battery_indicator(img, battery)
 
         return img
 

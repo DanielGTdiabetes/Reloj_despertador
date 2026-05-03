@@ -108,6 +108,24 @@ fallaba bajo systemd en esta instalacion.
 | DIN | GPIO21 | 40 | PCM_DOUT |
 | SD | - | sin conectar | Ganancia maxima |
 
+## DFR0528 UPS HAT
+
+El HAT se conecta directamente al header de 40 pines — **sin cableado adicional**.
+Usa los pines I2C del propio header:
+
+| Señal | GPIO | Pin físico | Notas |
+|-------|------|-----------|-------|
+| SDA   | GPIO2 | 3        | I2C bus 1, ya habilitado |
+| SCL   | GPIO3 | 5        | I2C bus 1, ya habilitado |
+| VCC   | —     | 2 ó 4    | 5V del header |
+| GND   | —     | 6        | GND |
+
+Dirección I2C: `0x10` (verificar con `i2cdetect -y 1` tras instalar)
+
+Ver documentación completa en `docs/ups_hat.md`.
+
+---
+
 ## /boot/firmware/config.txt
 
 Estado correcto (tras fix cold boot):

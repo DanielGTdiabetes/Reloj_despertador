@@ -14,6 +14,7 @@ from hardware.audio import I2SAudio
 from hardware.rotary_encoder import RotaryEncoder
 from display import DisplayManager
 from paths import CONFIG_PATH as DEFAULT_CONFIG_PATH
+from services.battery import BatteryService
 from services.clock import ClockService
 from services.lunar import LunarService
 from services.sun import SunService
@@ -101,6 +102,10 @@ class AlarmClockApp:
         self.displays = None
         self.events: queue.Queue[tuple[str, object]] = queue.Queue(maxsize=200)
 
+        # ── UPS / Batería ────────────────────────────────────────────────────
+        self.battery: BatteryService | None = None
+        self._battery_shutdown_requested = False  # flag para shutdown seguro
+
         self._init_services()
         self._init_ui()
         self._init_hardware()
@@ -124,6 +129,22 @@ class AlarmClockApp:
         self.sun = SunService(lat=lat, lon=lon, timezone=timezone)
         self.lunar = LunarService(lat=lat, lon=lon)
         self.audio = None
+
+        # ── UPS HAT — solo se activa si ups.enabled=true en config.json ──────
+        ups_cfg = self.config.get("ups", {})
+        addr_raw = ups_cfg.get("i2c_address", 0x10)
+        if isinstance(addr_raw, str):
+            addr_raw = int(addr_raw, 16)
+        self.battery = BatteryService(
+            enabled=ups_cfg.get("enabled", False),
+            bus=ups_cfg.get("i2c_bus", 1),
+            address=addr_raw,
+            warning_threshold=ups_cfg.get("warning_threshold", 20.0),
+            shutdown_threshold=ups_cfg.get("shutdown_threshold", 2.0),
+            on_low_battery=self._on_battery_low,
+            on_shutdown_required=self._on_battery_shutdown,
+        )
+        self.battery.start()
 
     def _init_ui(self):
         self.ui_round = RoundHomeScreen()
@@ -181,6 +202,24 @@ class AlarmClockApp:
             print("[Weather] disabled by env")
         else:
             threading.Thread(target=self._refresh_weather, daemon=True).start()
+
+    # ── Callbacks de batería ─────────────────────────────────────────────────
+
+    def _on_battery_low(self, level: str, pct: float) -> None:
+        """Llamado por BatteryService cuando el nivel es warning o critical."""
+        if level == "critical":
+            self.status = f"BATERÍA CRÍTICA {pct:.0f}%"
+        else:
+            self.status = f"Batería baja {pct:.0f}% — conecta cargador"
+
+    def _on_battery_shutdown(self) -> None:
+        """Llamado por BatteryService justo antes de ejecutar shutdown -h now."""
+        self.status = "BATERÍA AGOTADA — APAGANDO"
+        self._battery_shutdown_requested = True
+        # Dejamos running=True para que el loop renderice el aviso
+        # BatteryService esperará SHUTDOWN_DELAY segundos y ejecutará shutdown
+
+    # ── Señales del SO ───────────────────────────────────────────────────────
 
     def _stop_signal(self, signum, frame):
         self.running = False
@@ -525,6 +564,9 @@ class AlarmClockApp:
             self.displays.submit(round_image=round_img, rect_image=rect_img)
 
     def _render_round(self, now):
+        # Estado de batería para el render (None si HAT no disponible)
+        batt = self.battery.get_state() if self.battery else None
+
         if self.state == State.CLOCK:
             times = self.sun.get_sunrise_sunset(now)
             sun_info = {
@@ -535,9 +577,11 @@ class AlarmClockApp:
             }
             moon = self.lunar.get_phase()
 
-            # ── NUEVO: pantalla de noche con luna por fases ──────────────────
+            # ── Pantalla de noche con luna por fases ─────────────────────────
             if sun_info["period"] == "night":
-                return self.ui_round.render_night(now, moon, self.alarm, sun_info)
+                return self.ui_round.render_night(
+                    now, moon, self.alarm, sun_info, battery=batt
+                )
             # ─────────────────────────────────────────────────────────────────
 
             # Enriquecer weather con temp_max/min del forecast del día 0
@@ -549,7 +593,7 @@ class AlarmClockApp:
                 current.setdefault("temp_min", today.get("temp_min"))
 
             return self.ui_round.render(now, current, sun_info, moon,
-                                        self.alarm, self.status)
+                                        self.alarm, self.status, battery=batt)
 
         if self.state == State.MENU:
             key, label = MENU_ITEMS[self.menu_index]
@@ -676,6 +720,8 @@ class AlarmClockApp:
                 if self.clock.should_sync():
                     threading.Thread(target=self.clock.sync_time, daemon=True).start()
                 last_weather_check = now
+            # BatteryService gestiona su propio hilo; solo esperamos que el
+            # sistema operativo ejecute el shutdown. Seguimos renderizando el aviso.
             time.sleep(0.05)
         self.cleanup()
 
@@ -687,6 +733,8 @@ class AlarmClockApp:
             self.encoder.cleanup()
         if self.displays:
             self.displays.cleanup()
+        if self.battery:
+            self.battery.stop()
 
 
 if __name__ == "__main__":

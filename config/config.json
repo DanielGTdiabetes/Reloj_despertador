@@ -76,5 +76,13 @@
         "brightness_rect": 80,
         "theme": "dark",
         "language": "es"
+    },
+    "ups": {
+        "_comment": "DFR0528 UPS HAT — cambiar enabled a true cuando el hardware esté instalado",
+        "enabled": false,
+        "i2c_bus": 1,
+        "i2c_address": 16,
+        "warning_threshold": 20,
+        "shutdown_threshold": 2
     }
 }
