@@ -153,7 +153,7 @@ class RoundHomeScreen:
 
         # Icono Central
         desc = (weather.get("description") or "").upper()
-        draw_weather_icon(img, desc, CX, 140, size=55)
+        draw_weather_icon(img, desc, CX, 152, size=50)
 
         # Indicador de Alarma LATERAL
         self._draw_sidebar_alarm(img, alarm)

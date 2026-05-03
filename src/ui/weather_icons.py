@@ -11,11 +11,16 @@ _WEATHER_DIR  = os.path.join(os.path.dirname(__file__), "..", "assets", "weather
 
 def get_icon_key(description: str) -> str:
     desc = (description or "").lower()
-    if "storm" in desc or "thunder" in desc: return "storm"
-    if "snow"  in desc:                      return "snow"
-    if "rain"  in desc or "drizzle" in desc: return "rain"
-    if "fog"   in desc or "mist"    in desc: return "fog"
-    if "sun"   in desc or "clear"   in desc: return "sun"
+    if "storm" in desc or "thunder" in desc or "tormenta" in desc or "trueno" in desc:
+        return "storm"
+    if "snow" in desc or "nieve" in desc or "nevada" in desc:
+        return "snow"
+    if "rain" in desc or "drizzle" in desc or "lluvia" in desc or "llovizna" in desc or "chubasco" in desc:
+        return "rain"
+    if "fog" in desc or "mist" in desc or "niebla" in desc or "neblina" in desc or "bruma" in desc:
+        return "fog"
+    if "sun" in desc or "clear" in desc or "despejado" in desc or "claro" in desc:
+        return "sun"
     return "partly"
 
 

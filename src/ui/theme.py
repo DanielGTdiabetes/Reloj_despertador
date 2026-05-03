@@ -39,7 +39,7 @@ def _ttf(name: str, size: int) -> ImageFont.FreeTypeFont:
 class _Fonts:
     def __init__(self):
         self.clock = _ttf("arialbd.ttf", 62)       # Ajuste final a 62px para seguridad total
-        self.date_top = _ttf("arialbd.ttf", 20)
+        self.date_top = _ttf("arialbd.ttf", 17)
         self.weather_sub = _ttf("arialbd.ttf", 14) 
         self.temp_big = _ttf("arialbd.ttf", 26)    
         self.card_day = _ttf("arialbd.ttf", 13)

@@ -30,7 +30,7 @@ def _text_center_x(draw, y, text, font, fill, x0, x1):
     draw.text((x0 + (x1 - x0 - tw) // 2, y), text, font=font, fill=fill)
 
 class RectUIScreen:
-    ICON_SIZE = 42   # Bajamos a 42 para dejar hueco a las gotas de lluvia
+    ICON_SIZE = 36
 
     @staticmethod
     def _period_theme(period: str):
@@ -61,14 +61,13 @@ class RectUIScreen:
             draw.rounded_rectangle([x1, PAD_Y, x1+card_w, PAD_Y+card_h],
                                    radius=8, outline=card_border, width=1)
             wd = day.get("weekday", (time.localtime().tm_wday + i + 1) % 7)
-            _text_center_x(draw, PAD_Y+1, ["LUN","MAR","MIE","JUE","VIE","SAB","DOM"][wd], F.card_day, WHITE, x1, x1+card_w)
-            
-            # Icono 42px y ligeramente más arriba (y=32 en lugar de 37) para dar aire abajo
-            draw_weather_icon(img, day.get("description", ""), x1 + card_w // 2, PAD_Y + 10 + self.ICON_SIZE // 2, size=self.ICON_SIZE)
+            _text_center_x(draw, PAD_Y+4, ["LUN","MAR","MIE","JUE","VIE","SAB","DOM"][wd], F.card_day, WHITE, x1, x1+card_w)
+
+            draw_weather_icon(img, day.get("description", ""), x1 + card_w // 2, PAD_Y + 19 + self.ICON_SIZE // 2, size=self.ICON_SIZE)
             
             tmax = day.get("temp_max")
             if tmax is not None:
-                _text_center_x(draw, H-PAD_Y-12, f"{tmax:.0f}\u00b0", F.card_temp, WHITE, x1, x1+card_w)
+                _text_center_x(draw, H-PAD_Y-16, f"{tmax:.0f}\u00b0", F.card_temp, WHITE, x1, x1+card_w)
         return img
 
     def render_menu(self, items, index) -> Image.Image:

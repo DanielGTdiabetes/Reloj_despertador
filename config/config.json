@@ -5,20 +5,20 @@
     },
     "weather": {
         "api_key": "bc0fbcb8537c4c41d664f7ec6b0d6133",
-        "location": "Vila-real",
-        "lat": 39.94,
-        "lon": -0.10,
+        "location": "Vigo",
+        "lat": 42.23,
+        "lon": -8.72,
         "timezone": "Europe/Madrid",
         "update_interval_minutes": 10,
         "forecast_rotation_minutes": 5
     },
     "location": {
-        "city": "Vila-real",
-        "region": "Castellon",
+        "city": "Vigo",
+        "region": "Galicia",
         "country": "Espana",
-        "lat": 39.94,
-        "lon": -0.10,
-        "postal_code": "12540"
+        "lat": 42.23,
+        "lon": -8.72,
+        "postal_code": "36201"
     },
     "displays": {
         "round": {
