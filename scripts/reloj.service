@@ -1,14 +1,17 @@
 [Unit]
 Description=Reloj Despertador
-After=network.target
+After=sysinit.target local-fs.target
 
 [Service]
 User=dani
 WorkingDirectory=/home/dani/reloj_despertador
 Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStartPre=/bin/bash -c 'find /home/dani/reloj_despertador -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true'
 ExecStart=/usr/bin/python3 -u src/main.py
-Restart=on-failure
+Restart=always
 RestartSec=5
+StartLimitIntervalSec=0
 StandardOutput=journal
 StandardError=journal
 
