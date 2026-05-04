@@ -150,7 +150,7 @@ class RoundHomeScreen:
     # ── Pantalla de día ───────────────────────────────────────────────────────
 
     def render(self, now, weather: dict, sun_info: dict,
-               moon: dict, alarm: dict, status: str) -> Image.Image:
+               moon: dict, alarm: dict, status: str, battery=None) -> Image.Image:
         """
         Pantalla principal de día/amanecer/atardecer.
         Muestra: arco solar, fecha, hora, temp min/max, icono clima, descripción,
