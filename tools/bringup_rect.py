@@ -53,8 +53,8 @@ def main() -> int:
             dc_pin=22,
             rst_pin=27,
             bl_pin=23,
-            col_offset=82,
-            row_offset=18,
+            col_offset=18,
+            row_offset=82,
         )
 
         for name, color in COLORS:
