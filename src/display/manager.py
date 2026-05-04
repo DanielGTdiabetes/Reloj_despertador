@@ -78,9 +78,18 @@ class DisplayManager:
 
     def submit(self, *, round_image: Any | None = None, rect_image: Any | None = None) -> None:
         if round_image is not None and self.round is not None:
-            self.round.render(round_image)
+            try:
+                self.round.render(round_image)
+            except Exception as exc:
+                self._round_error = str(exc)
+                traceback.print_exc()
+
         if rect_image is not None and self.rect is not None:
-            self.rect.render(rect_image)
+            try:
+                self.rect.render(rect_image)
+            except Exception as exc:
+                self._rect_error = str(exc)
+                traceback.print_exc()
 
     def cleanup(self) -> None:
         if self.round:
