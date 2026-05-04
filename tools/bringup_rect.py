@@ -48,8 +48,8 @@ def main() -> int:
     try:
         display = ST7789Display(
             spi_port=0,
-            spi_device=1,
-            cs_pin=7,
+            spi_device=0,
+            cs_pin=16,
             dc_pin=22,
             rst_pin=27,
             bl_pin=23,
