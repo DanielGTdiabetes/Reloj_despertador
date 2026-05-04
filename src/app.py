@@ -107,6 +107,12 @@ class AlarmClockApp:
         self.battery: BatteryService | None = None
         self._battery_shutdown_requested = False  # flag para shutdown seguro
 
+        boot_cfg = self.config.get("boot", {})
+        boot_delay = int(boot_cfg.get("startup_delay_seconds", 0))
+        if boot_delay > 0:
+            print(f"[BOOT] delaying startup {boot_delay}s for SPI/GPIO readiness")
+            time.sleep(boot_delay)
+
         self._init_services()
         self._init_ui()
         self._init_hardware()

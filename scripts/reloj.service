@@ -1,8 +1,7 @@
 [Unit]
 Description=Reloj Despertador
-# Arranca tras el sistema de ficheros local. No esperamos red:
-# el WeatherService reintenta internamente cuando hay conectividad.
-After=sysinit.target local-fs.target
+After=multi-user.target
+Wants=multi-user.target
 
 [Service]
 Type=notify
@@ -10,27 +9,13 @@ User=dani
 WorkingDirectory=/home/dani/reloj_despertador
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1
-
-# ── Watchdog ─────────────────────────────────────────────────────────────────
-# systemd envía WATCHDOG=1 al kernel watchdog mientras la app lo pingee.
-# Si la app se cuelga y deja de pingar durante 90s → systemd la mata y reinicia.
-# El kernel watchdog (dtoverlay=watchdog=on) hace reset hardware si systemd
-# también muere (protección doble contra kernel panic / OOM).
-WatchdogSec=90
-NotifyAccess=main
-
-# ── Inicio ───────────────────────────────────────────────────────────────────
-ExecStartPre=/bin/bash -c 'find /home/dani/reloj_despertador -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true'
+ExecStartPre=/bin/bash /home/dani/reloj_despertador/scripts/preflight_hw.sh
 ExecStart=/usr/bin/python3 -u src/main.py
-
-# ── Reinicio automático ───────────────────────────────────────────────────────
 Restart=always
 RestartSec=5
 StartLimitIntervalSec=0
-
-# ── Logging ───────────────────────────────────────────────────────────────────
-# journald se configura en volatile (RAM) por setup_sd_protection.sh,
-# así que esto no genera escrituras en la SD durante operación normal.
+WatchdogSec=90
+NotifyAccess=main
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=reloj

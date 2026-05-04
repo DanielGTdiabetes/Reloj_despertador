@@ -1,26 +1,24 @@
-"""
-Bus SPI compartido y serializado.
-
-Los dos displays (GC9A01 redonda y ST7789P3 rect) comparten físicamente MOSI/SCK
-en SPI0. Cada uno usa un device distinto (CE0/CE1) con velocidades y modos
-diferentes. Tener handles `spidev` abiertos en paralelo y alternar entre ellos
-sin reconfigurar el controlador deja el bus en estado inconsistente.
-
-`SpiBus` resuelve eso:
-  - Singleton con lock global.
-  - Mantiene un handle `spidev.SpiDev` por device, abierto perezosamente.
-  - El context manager `transaction()` adquiere el lock y reaplica
-    `max_speed_hz` y `mode` del device pedido antes de cada uso. Así nunca se
-    asume que la configuración persiste entre llamadas.
-"""
-
 from __future__ import annotations
 
 import threading
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import Iterator
 
+import RPi.GPIO as GPIO
 import spidev
+
+
+@dataclass(frozen=True)
+class SpiDeviceProfile:
+    name: str
+    port: int
+    device: int
+    cs_pin: int
+    mode: int = 0
+    bits_per_word: int = 8
+    init_speed_hz: int = 4_000_000
+    frame_speed_hz: int = 24_000_000
 
 
 class SpiBus:
@@ -30,6 +28,7 @@ class SpiBus:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._handles: dict[tuple[int, int], spidev.SpiDev] = {}
+        self._profiles: dict[str, SpiDeviceProfile] = {}
 
     @classmethod
     def instance(cls) -> "SpiBus":
@@ -38,6 +37,15 @@ class SpiBus:
                 if cls._instance is None:
                     cls._instance = cls()
         return cls._instance
+
+    def register_device(self, profile: SpiDeviceProfile) -> None:
+        self._profiles[profile.name] = profile
+        GPIO.setup(profile.cs_pin, GPIO.OUT, initial=GPIO.HIGH)
+        print(f"[SPI] registered {profile.name} spi{profile.port}.{profile.device} CS={profile.cs_pin}")
+
+    def _all_cs_high(self) -> None:
+        for profile in self._profiles.values():
+            GPIO.output(profile.cs_pin, GPIO.HIGH)
 
     def _handle(self, port: int, device: int) -> spidev.SpiDev:
         key = (port, device)
@@ -48,28 +56,34 @@ class SpiBus:
             try:
                 spi.no_cs = True
             except Exception:
-                # Algunos kernels no exponen no_cs; ignoramos y delegamos en CS manual.
                 pass
             self._handles[key] = spi
         return spi
 
     @contextmanager
-    def transaction(
-        self,
-        port: int,
-        device: int,
-        speed_hz: int,
-        mode: int = 0,
-    ) -> Iterator[spidev.SpiDev]:
-        """Toma el lock global y reconfigura el handle del device antes de usarlo."""
+    def transaction(self, name: str, *, init_phase: bool = False) -> Iterator[spidev.SpiDev]:
+        if name not in self._profiles:
+            raise ValueError(f"[SPI] unknown device profile: {name}")
+
+        profile = self._profiles[name]
+        speed = profile.init_speed_hz if init_phase else profile.frame_speed_hz
+
         with self._lock:
-            spi = self._handle(port, device)
-            spi.max_speed_hz = speed_hz
-            spi.mode = mode
-            yield spi
+            spi = self._handle(profile.port, profile.device)
+            self._all_cs_high()
+            spi.mode = profile.mode
+            spi.bits_per_word = profile.bits_per_word
+            spi.max_speed_hz = speed
+            GPIO.output(profile.cs_pin, GPIO.LOW)
+            try:
+                yield spi
+            finally:
+                GPIO.output(profile.cs_pin, GPIO.HIGH)
+                self._all_cs_high()
 
     def close(self) -> None:
         with self._lock:
+            self._all_cs_high()
             for spi in self._handles.values():
                 try:
                     spi.close()
