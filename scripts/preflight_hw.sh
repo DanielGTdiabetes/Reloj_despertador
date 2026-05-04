@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-for dev in /dev/spidev0.0 /dev/spidev0.1; do
+# Solo spidev0.0 — el ST7789 usa CS manual en GPIO16, no necesita /dev/spidev0.1
+for dev in /dev/spidev0.0; do
   if [ ! -e "$dev" ]; then
     echo "[BOOT] missing $dev"
     exit 1

@@ -4,7 +4,7 @@ After=multi-user.target
 Wants=multi-user.target
 
 [Service]
-Type=notify
+Type=simple
 User=dani
 WorkingDirectory=/home/dani/reloj_despertador
 Environment=PYTHONUNBUFFERED=1
@@ -13,9 +13,6 @@ ExecStartPre=/bin/bash /home/dani/reloj_despertador/scripts/preflight_hw.sh
 ExecStart=/usr/bin/python3 -u src/main.py
 Restart=always
 RestartSec=5
-StartLimitIntervalSec=0
-WatchdogSec=90
-NotifyAccess=main
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=reloj
