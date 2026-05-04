@@ -2,7 +2,6 @@ import os
 import queue
 import re
 import signal
-import socket
 import subprocess
 import threading
 import time
@@ -107,30 +106,11 @@ class AlarmClockApp:
         self.battery: BatteryService | None = None
         self._battery_shutdown_requested = False  # flag para shutdown seguro
 
-        boot_cfg = self.config.get("boot", {})
-        boot_delay = int(boot_cfg.get("startup_delay_seconds", 0))
-        if boot_delay > 0:
-            print(f"[BOOT] delaying startup {boot_delay}s for SPI/GPIO readiness")
-            time.sleep(boot_delay)
-
         self._init_services()
         self._init_ui()
         self._init_hardware()
         self._register_signals()
         self._start_background_refresh()
-        self._sd_notify(b"READY=1")
-
-    @staticmethod
-    def _sd_notify(msg: bytes) -> None:
-        path = os.environ.get("NOTIFY_SOCKET")
-        if not path:
-            return
-        try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as s:
-                s.connect(path)
-                s.sendall(msg)
-        except OSError:
-            pass
 
     def _load_config(self):
         return load_config(self.CONFIG_PATH)
@@ -727,7 +707,6 @@ class AlarmClockApp:
         print("[Main] starting")
         last_render = 0.0
         last_weather_check = 0.0
-        last_watchdog_ping = 0.0
         while self.running:
             self._process_events()
             now = time.time()
@@ -741,10 +720,6 @@ class AlarmClockApp:
                 if self.clock.should_sync():
                     threading.Thread(target=self.clock.sync_time, daemon=True).start()
                 last_weather_check = now
-            # Watchdog ping: cada 30s (WatchdogSec=90, systemd exige <45s)
-            if now - last_watchdog_ping >= 30.0:
-                self._sd_notify(b"WATCHDOG=1")
-                last_watchdog_ping = now
             # BatteryService gestiona su propio hilo; solo esperamos que el
             # sistema operativo ejecute el shutdown. Seguimos renderizando el aviso.
             time.sleep(0.05)

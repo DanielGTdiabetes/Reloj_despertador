@@ -42,8 +42,8 @@
             "dc_pin": 22,
             "rst_pin": 27,
             "bl_pin": 23,
-            "col_offset": 82,
-            "row_offset": 18
+            "col_offset": 18,
+            "row_offset": 82
         }
     },
     "encoder": {
@@ -63,23 +63,12 @@
         "enabled": false,
         "hour": 7,
         "minute": 0,
-        "days": [
-            0,
-            1,
-            2,
-            3,
-            4,
-            5,
-            6
-        ],
+        "days": [0, 1, 2, 3, 4, 5, 6],
         "snooze_minutes": 5,
         "volume": 80
     },
     "ntp": {
-        "servers": [
-            "pool.ntp.org",
-            "time.nist.gov"
-        ],
+        "servers": ["pool.ntp.org", "time.nist.gov"],
         "sync_interval_hours": 6
     },
     "ui": {
@@ -94,11 +83,6 @@
         "i2c_bus": 1,
         "i2c_address": 16,
         "warning_threshold": 20,
-        "shutdown_threshold": 2,
-        "poll_interval": 30
-    },
-    "boot": {
-        "startup_delay_seconds": 3,
-        "diag_only_rect": false
+        "shutdown_threshold": 2
     }
 }

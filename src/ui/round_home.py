@@ -1,302 +1,274 @@
-"""
-round_home.py — Pantalla redonda premium.
-CAMBIOS respecto a la versión anterior:
-  - _draw_solar_arc(): arco con progreso solar + punto sol + colores por período
-  - render(): iconos meteorológicos PIL de alta calidad, temp min/max, badge campana
-  - render_night(): pantalla de noche con luna por fases, estrellas, badge alarma
-  - render_focus(): compatible con icono 'location' (pin de mapa)
-  - get_period(): función auxiliar que espeja la lógica de SunService
-
-Compatible 100% con app.py — no cambia ninguna firma de método existente.
-Solo se añade render_night() que app.py llama cuando period == 'night'.
-"""
 from __future__ import annotations
 import math
 import time
 import random
-from typing import Optional
+import os
 from PIL import Image, ImageDraw
-from .theme import (
-    F, CYAN, PURPLE, BG, WHITE, DIM_WHITE, ICONS,
-    condition_to_icon_file, draw_menu_icon
-)
+from .theme import F, CYAN, PURPLE, BG, WHITE, DIM_WHITE, AMBER, YELLOW, ICONS, draw_menu_icon
 from .weather_icons import draw_weather_icon, draw_moon
 
-# ── Dimensiones ───────────────────────────────────────────────────────────────
 W = H = 240
 CX = CY = 120
-ARC_R     = 114
+ARC_R = 114
 ARC_THICK = 5
 
-# ── Colores adicionales ───────────────────────────────────────────────────────
-AMBER    = (255, 180,  60)
-DIM_CYAN = ( 60, 110, 140)
-SUN_DOT  = (255, 200,  60)
-MOON_TXT = (220, 210, 170)
-RED_DIM  = (200,  80,  80)
+# Estrellas fijas para el modo noche (seed determinista = sin parpadeo)
+_rng = random.Random(42)
+_STARS = [
+    (
+        _rng.randint(2, W - 3),
+        _rng.randint(2, H - 3),
+        _rng.choice([0, 0, 0, 0, 1, 1, 2]),          # radio: mayoría puntitos
+        _rng.randint(140, 255),                        # brillo
+        _rng.choice([(1.0, 1.0, 1.0), (0.85, 0.9, 1.0), (1.0, 1.0, 0.88)]),  # tinte
+    )
+    for _ in range(75)
+]
 
-# Paleta de arco según período del día
-_ARC_PALETTE = {
-    "day":     {"a": CYAN,              "b": PURPLE,            "dot": SUN_DOT},
-    "dawn":    {"a": (255, 160,  80),   "b": (180, 100, 220),   "dot": (255, 200, 100)},
-    "dusk":    {"a": (255, 100,  60),   "b": (200,  80, 180),   "dot": (255, 140,  80)},
-    "night":   {"a": ( 80,  80, 160),   "b": ( 50,  50, 120),   "dot": (100, 100, 200)},
-}
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _text_center(draw: ImageDraw.Draw, y: int, text: str, font, fill: tuple) -> None:
+def _text_center(draw, y, text, font, fill):
     bb = draw.textbbox((0, 0), text, font=font)
-    w  = bb[2] - bb[0]
-    draw.text(((W - w) // 2, y), text, font=font, fill=fill)
+    draw.text(((W - (bb[2] - bb[0])) // 2, y), text, font=font, fill=fill)
 
-def _text_right(draw: ImageDraw.Draw, y: int, x_right: int,
-                text: str, font, fill: tuple) -> None:
-    bb = draw.textbbox((0, 0), text, font=font)
-    draw.text((x_right - (bb[2]-bb[0]), y), text, font=font, fill=fill)
-
-def _draw_stars(img: Image.Image, count: int = 45) -> None:
-    """Estrellas con posición fija (seed=42)."""
-    draw = ImageDraw.Draw(img)
-    rng  = random.Random(42)
-    for _ in range(count):
-        while True:
-            x = rng.randint(10, W - 10)
-            y = rng.randint(10, H - 10)
-            if (x - CX)**2 + (y - CY)**2 < (ARC_R - 8)**2:
-                break
-        alpha = rng.randint(40, 180)
-        size  = rng.randint(1, 2)
-        draw.ellipse([x, y, x+size, y+size],
-                     fill=(alpha, alpha, min(255, alpha+30)))
-
-# ── Arco solar ────────────────────────────────────────────────────────────────
-
-def _draw_solar_arc(draw: ImageDraw.Draw, period: str, progress: float,
-                    sunrise_dt=None, sunset_dt=None) -> None:
-    """
-    Dibuja el arco exterior de la pantalla redonda con progreso solar.
-    progress: 0.0=amanecer, 1.0=atardecer, -1=noche/fuera de rango.
-    """
-    pal = _ARC_PALETTE.get(period, _ARC_PALETTE["day"])
-    box = [CX - ARC_R, CY - ARC_R, CX + ARC_R, CY + ARC_R]
-
-    # Track base
-    draw.arc(box, start=-90, end=270, fill=(20, 25, 45), width=ARC_THICK + 2)
-    # Arco B (lado izquierdo fijo)
-    draw.arc(box, start=90,  end=270, fill=pal["b"],     width=ARC_THICK)
-
-    # Arco A (progreso solar, lado derecho)
-    isday = 0.0 <= progress <= 1.0
-    if isday and progress > 0.01:
-        end_angle = -90 + int(180 * progress)
-        draw.arc(box, start=-90, end=end_angle, fill=pal["a"], width=ARC_THICK)
-        # Punto sol
-        angle_rad = math.radians(-90 + 180 * progress)
-        sx = int(CX + ARC_R * math.cos(angle_rad))
-        sy = int(CY + ARC_R * math.sin(angle_rad))
-        r_dot = ARC_THICK + 2
-        draw.ellipse([sx-r_dot, sy-r_dot, sx+r_dot, sy+r_dot], fill=pal["dot"])
-    elif not isday:
-        draw.arc(box, start=-90, end=90, fill=pal["a"], width=ARC_THICK)
-
-# ── Badge de alarma ───────────────────────────────────────────────────────────
-
-_DAY_LABELS = ["L","M","X","J","V","S","D"]
-
-def _days_label(days: list) -> str:
-    if not days: return ""
-    s = sorted(days)
-    if len(s) == 7:   return "TODOS"
-    if s == [0,1,2,3,4]: return "L-V"
-    if s == [5,6]:    return "S-D"
-    if len(s) <= 3:   return " ".join(_DAY_LABELS[d] for d in s)
-    return f"{len(s)}d"
-
-def _draw_alarm_badge(draw: ImageDraw.Draw, alarm: dict, y: int,
-                      badge_color: tuple = None) -> None:
-    """Dibuja badge de alarma con campana + hora + días."""
-    col = badge_color or (AMBER if alarm.get("enabled") else (50, 55, 75))
-    if not alarm.get("enabled"):
-        _text_center(draw, y, "ALARMA OFF", F.weather_sub, (55, 60, 80))
-        return
-    h_str = f"{alarm.get('hour', 7):02d}:{alarm.get('minute', 0):02d}"
-    days  = _days_label(alarm.get("days", list(range(7))))
-
-    # Campana PIL (simple, clara y reconocible)
-    bx, by = CX - 38, y
-    bs = 11
-    draw.chord([bx, by, bx+bs, by+bs-2], 180, 0, fill=col)
-    draw.rectangle([bx-1, by+bs-4, bx+bs+1, by+bs-1], fill=col)
-    draw.ellipse([bx+bs//2-2, by+bs-2, bx+bs//2+2, by+bs+3], fill=WHITE)
-
-    # Texto hora
-    tx = bx + bs + 5
-    draw.text((tx, y), h_str, font=F.weather_sub, fill=col)
-    if days:
-        bb = draw.textbbox((0, 0), h_str, font=F.weather_sub)
-        draw.text((tx + bb[2]-bb[0] + 4, y+1), days, font=F.weather_sub,
-                  fill=(*col[:3],) if len(col) == 3 else col)
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  CLASE PRINCIPAL
-# ══════════════════════════════════════════════════════════════════════════════
 
 class RoundHomeScreen:
+    def __init__(self):
+        self._last_period: str | None = None
 
-    def __init__(self) -> None:
-        pass
+    @staticmethod
+    def _star_points(cx, cy, r_out, r_in, n=5, offset_deg=0):
+        pts = []
+        for i in range(n * 2):
+            r = r_out if i % 2 == 0 else r_in
+            a = math.radians(offset_deg + i * 180 / n)
+            pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+        return pts
 
-    # ── Pantalla de día ───────────────────────────────────────────────────────
+    @staticmethod
+    def _period_theme(period):
+        if period == "sunrise":
+            return {
+                "bg":        (18, 10, 4),
+                "clock":     (255, 210, 110),
+                "date":      AMBER,
+                "ring_tail": (110, 55, 8),
+                "ring_tip":  (255, 200, 0),
+                "temp":      AMBER,
+            }
+        elif period == "sunset":
+            return {
+                "bg":        (18, 6, 14),
+                "clock":     (255, 150, 70),
+                "date":      (220, 100, 50),
+                "ring_tail": (110, 30, 8),
+                "ring_tip":  (255, 110, 20),
+                "temp":      (255, 140, 60),
+            }
+        else:
+            return {
+                "bg":        BG,
+                "clock":     WHITE,
+                "date":      CYAN,
+                "ring_tail": (0, 80, 130),
+                "ring_tip":  YELLOW,
+                "temp":      CYAN,
+            }
 
-    def render(self, now, weather: dict, sun_info: dict,
-               moon: dict, alarm: dict, status: str, battery=None) -> Image.Image:
+    def _draw_seconds_ring(self, draw, tail_col=(0, 80, 130), tip_col=YELLOW):
+        seconds = time.time() % 60.0
+        angle = -90.0 + (seconds / 60.0) * 360.0
+
+        box = [CX - ARC_R, CY - ARC_R, CX + ARC_R, CY + ARC_R]
+        draw.arc(box, start=0, end=360, fill=(18, 22, 38), width=ARC_THICK)
+
+        tail_start = int(angle) - 48
+        draw.arc(box, start=tail_start, end=int(angle), fill=tail_col, width=ARC_THICK)
+
+        rad = math.radians(angle)
+        sx = CX + ARC_R * math.cos(rad)
+        sy = CY + ARC_R * math.sin(rad)
+        star = self._star_points(sx, sy, r_out=5.5, r_in=2.2, n=5, offset_deg=-90)
+        draw.polygon(star, fill=tip_col)
+
+    def _draw_sidebar_alarm(self, img, alarm):
+        enabled = alarm.get("enabled", False)
+        ax, ay = 63, 148
+        size = 24
+        try:
+            icon_path = os.path.join(os.path.dirname(__file__), "..", "assets", "menu_icons", "alarm.png")
+            if os.path.exists(icon_path):
+                icon = Image.open(icon_path).convert("RGBA").resize((size, size))
+                if not enabled:
+                    alpha = icon.getchannel('A')
+                    icon = Image.new("RGBA", (size, size), (60, 65, 80, 255))
+                    icon.putalpha(alpha)
+                img.paste(icon, (ax - size // 2, ay - size // 2), icon)
+            else:
+                draw = ImageDraw.Draw(img)
+                col = AMBER if enabled else (60, 65, 80)
+                draw.text((ax - 10, ay - 10), "A" if enabled else "a", font=F.weather_sub, fill=col)
+        except Exception:
+            pass
+
+    def _draw_night_stars(self, draw):
+        for (x, y, r, brightness, tint) in _STARS:
+            color = tuple(int(brightness * t) for t in tint)
+            if r == 0:
+                draw.point((x, y), fill=color)
+            else:
+                draw.ellipse([x - r, y - r, x + r, y + r], fill=color)
+
+    def _draw_battery_indicator(self, img, battery_state) -> None:
+        """Indicador de batería — lado derecho, simétrico al icono de alarma.
+
+        Posición: X=177, Y=148 (espejo de la alarma en X=63, Y=148).
+        Se dibuja solo si battery_state no es None (HAT presente y habilitado).
+
+        Geometría:
+          ┌──────────────────┬──┐
+          │ relleno SOC %    │+ │  ← cuerpo 22×12 + polo derecho 3×6
+          └──────────────────┴──┘
+                  85%             ← texto porcentaje debajo
         """
-        Pantalla principal de día/amanecer/atardecer.
-        Muestra: arco solar, fecha, hora, temp min/max, icono clima, descripción,
-                 temperatura actual, badge alarma.
-        """
-        img  = Image.new("RGB", (W, H), BG)
+        if battery_state is None:
+            return
+
         draw = ImageDraw.Draw(img)
+        soc   = battery_state.get("soc", 0) or 0
+        level = battery_state.get("level", "ok")
 
-        period   = sun_info.get("period", "day")
-        progress = sun_info.get("progress", 0.5)
-        sunrise  = sun_info.get("sunrise")
-        sunset   = sun_info.get("sunset")
-        pal      = _ARC_PALETTE.get(period, _ARC_PALETTE["day"])
+        # Color según nivel de carga
+        if level == "shutdown":
+            # Parpadeo rojo crítico
+            col = (255, 40, 40) if int(time.time() * 2) % 2 == 0 else (100, 0, 0)
+        elif level == "critical":
+            col = (255, 80, 20)   # naranja intenso
+        elif level == "warning":
+            col = (255, 200, 0)   # amarillo
+        else:
+            col = (60, 200, 80)   # verde normal
 
-        # Arco solar
-        _draw_solar_arc(draw, period, progress, sunrise, sunset)
+        # Centro del indicador (simétrico al icono de alarma)
+        bx, by = 177, 145
 
-        # Fecha corta
-        days_es  = ["LUN","MAR","MIE","JUE","VIE","SAB","DOM"]
-        date_str = f"{days_es[now.weekday()]} {now.day:02d}"
-        _text_center(draw, 26, date_str, F.date_top, pal["a"])
+        # Cuerpo de la batería: 22×12 px
+        bw, bh = 22, 12
+        x0, y0 = bx - bw // 2, by - bh // 2
+        x1, y1 = x0 + bw, y0 + bh
+        draw.rectangle([x0, y0, x1, y1], outline=col, width=1)
 
-        # Hora
-        t_str = now.strftime("%H:%M")
-        bb    = draw.textbbox((0, 0), t_str, font=F.clock)
-        draw.text(((W-(bb[2]-bb[0]))//2, 48), t_str, font=F.clock, fill=WHITE)
+        # Polo positivo (+): 3×6 px pegado a la derecha
+        px_w, px_h = 3, 6
+        draw.rectangle([x1 + 1, by - px_h // 2, x1 + px_w, by + px_h // 2], fill=col)
 
-        # Temp min/max
-        temp_max = weather.get("temp_max")
-        temp_min = weather.get("temp_min")
-        # Intentar obtener de forecast si no viene en current
-        if temp_max is None:
-            temp_max = weather.get("temp")
-        if temp_max is not None and temp_min is not None:
-            minmax = f"\u2193{temp_min:.0f}\u00b0  \u2191{temp_max:.0f}\u00b0"
-            _text_center(draw, 100, minmax, F.weather_sub, DIM_WHITE)
+        # Relleno interior proporcional al SOC
+        inner_w = bw - 4   # margen interior 2 px por lado
+        fill_w  = max(0, int(inner_w * min(100.0, soc) / 100.0))
+        if fill_w > 0:
+            draw.rectangle([x0 + 2, y0 + 2, x0 + 2 + fill_w, y1 - 2], fill=col)
 
-        # Icono meteorológico PIL
-        desc = (weather.get("description") or "").upper()
-        draw_weather_icon(img, desc, CX, 128, size=50)
+        # Texto porcentaje
+        pct_str = f"{soc:.0f}%"
+        bb = draw.textbbox((0, 0), pct_str, font=F.small)
+        tw = bb[2] - bb[0]
+        draw.text((bx - tw // 2, y1 + 3), pct_str, font=F.small, fill=col)
 
-        # Descripción (truncada)
-        if desc:
-            _text_center(draw, 158, desc[:20], F.weather_sub, DIM_WHITE)
+    def render(self, now, weather, sun_info, moon, alarm, status, battery=None) -> Image.Image:
+        period = sun_info.get("period", "day")
+        th = self._period_theme(period)
 
-        # Temperatura actual
-        temp = weather.get("temp")
-        temp_str = f"{temp:.1f}\u00b0C" if temp is not None else "--\u00b0C"
-        _text_center(draw, 172, temp_str, F.temp_big, pal["a"])
+        # Blank frame on period change to prevent LCD ghost retention
+        if period != self._last_period:
+            self._last_period = period
+            return Image.new("RGB", (W, H), BG)
 
-        # Badge alarma
-        _draw_alarm_badge(draw, alarm, 196)
-
-        return img
-
-    # ── Pantalla de noche (luna) ──────────────────────────────────────────────
-
-    def render_night(self, now, moon: dict, alarm: dict,
-                     sun_info: dict = None) -> Image.Image:
-        """
-        Pantalla de noche: fondo estrellado, arco nocturno, hora, fase lunar,
-        nombre de fase, badge alarma.
-
-        Args:
-            now:      datetime actual (timezone-aware).
-            moon:     dict con 'phase' (0.0-1.0), 'phase_name', 'illumination'.
-            alarm:    dict con 'enabled', 'hour', 'minute', 'days'.
-            sun_info: opcional, para arco correcto.
-        """
-        img  = Image.new("RGB", (W, H), BG)
+        img = Image.new("RGB", (W, H), th["bg"])
         draw = ImageDraw.Draw(img)
-
-        # Fondo nocturno con vignette
-        for dr in range(118, 0, -4):
-            t   = 1 - dr / 118
-            col = (int(5+t*10), int(10+t*12), int(25+t*18))
-            draw.ellipse([CX-dr, CY-dr, CX+dr, CY+dr], fill=col)
-
-        # Estrellas
-        _draw_stars(img)
-
-        # Arco nocturno
-        sun_info = sun_info or {}
-        _draw_solar_arc(draw, "night", -1,
-                        sun_info.get("sunrise"), sun_info.get("sunset"))
+        self._draw_seconds_ring(draw, tail_col=th["ring_tail"], tip_col=th["ring_tip"])
 
         # Fecha
-        days_es  = ["LUN","MAR","MIE","JUE","VIE","SAB","DOM"]
-        date_str = f"{days_es[now.weekday()]} {now.day:02d}"
-        _text_center(draw, 24, date_str, F.date_top, (80, 80, 165))
+        d_es = ["LUN", "MAR", "MIE", "JUE", "VIE", "SAB", "DOM"]
+        m_es = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"]
+        date_str = f"{d_es[now.weekday()]} {now.day} {m_es[now.month-1]}"
+        _text_center(draw, 22, date_str, F.date_top, th["date"])
 
-        # Hora con efecto pulso (varía con el segundo)
-        t_str = now.strftime("%H:%M")
-        pulse = (math.sin(time.time() * 0.7) + 1) / 2
-        pulse_col = tuple(int(WHITE[i] * (0.72 + 0.28 * pulse)) for i in range(3))
-        bb = draw.textbbox((0, 0), t_str, font=F.clock)
-        draw.text(((W-(bb[2]-bb[0]))//2, 46), t_str, font=F.clock, fill=pulse_col)
+        # Reloj
+        _text_center(draw, 40, now.strftime("%H:%M"), F.clock, th["clock"])
+
+        # Min / Max
+        t_max = weather.get("temp_max") or 24
+        t_min = weather.get("temp_min") or 14
+        min_txt, max_txt = f"min {t_min:.0f}°", f"max {t_max:.0f}°"
+        bb_min = draw.textbbox((0, 0), min_txt, font=F.weather_sub)
+        bb_max = draw.textbbox((0, 0), max_txt, font=F.weather_sub)
+        total_mm = (bb_min[2] - bb_min[0]) + (bb_max[2] - bb_max[0]) + 20
+        start_mm = (W - total_mm) // 2
+        draw.text((start_mm, 108), min_txt, font=F.weather_sub, fill=CYAN)
+        draw.text((start_mm + (bb_min[2] - bb_min[0]) + 20, 108), max_txt, font=F.weather_sub, fill=AMBER)
+
+        # Icono Central
+        desc = (weather.get("description") or "").upper()
+        draw_weather_icon(img, desc, CX, 152, size=50)
+
+        # Indicador de Alarma LATERAL (izquierda)
+        self._draw_sidebar_alarm(img, alarm)
+
+        # Indicador de Batería LATERAL (derecha, simétrico a la alarma)
+        self._draw_battery_indicator(img, battery)
+
+        # Desc y Temp
+        _text_center(draw, 178, desc[:22], F.small, DIM_WHITE)
+        temp = weather.get("temp")
+        _text_center(draw, 194, f"{temp:.1f}°C" if temp else "--.-°C", F.temp_big, th["temp"])
+
+        return img
+
+    def render_night(self, now, moon, alarm, sun_info=None, battery=None) -> Image.Image:
+        img = Image.new("RGB", (W, H), BG)
+        draw = ImageDraw.Draw(img)
+
+        # Estrellas de fondo
+        self._draw_night_stars(draw)
+
+        self._draw_seconds_ring(draw)
+
+        # Hora
+        _text_center(draw, 38, now.strftime("%H:%M"), F.clock, WHITE)
+
+        # Luna (PNG con fondo eliminado, tamaño generoso para mostrar glow)
+        phase_frac = moon.get("phase", 0.5)
+        draw_moon(img, CX, CY + 32, r=38, phase_frac=phase_frac)
 
         # Nombre de fase
-        phase_name = (moon.get("phase_name") or "").upper()
-        _text_center(draw, 110, phase_name, F.weather_sub, MOON_TXT)
+        phase_name = moon.get("phase_name", "")
+        if phase_name:
+            _text_center(draw, 200, phase_name, F.small, PURPLE)
 
-        # Luna PIL
-        moon_frac = moon.get("phase", 0.5)
-        draw_moon(img, CX, CY + 18, r=32, phase_frac=moon_frac,
-                  phase_name=phase_name)
-
-        # Iluminación
-        illumination = moon.get("illumination", 0)
-        _text_center(draw, 188, f"{illumination:.0f}% ilum.", F.weather_sub,
-                     (110, 110, 155))
-
-        # Badge alarma
-        _draw_alarm_badge(draw, alarm, 204,
-                          badge_color=AMBER if alarm.get("enabled") else None)
+        # Indicador de batería (modo noche — esquina derecha)
+        self._draw_battery_indicator(img, battery)
 
         return img
 
-    # ── Menú (focus) ─────────────────────────────────────────────────────────
-
-    def render_focus(self, title: str, subtitle: str,
-                     kind: str = "", value=None) -> Image.Image:
-        """
-        Pantalla de foco para estados de menú.
-        kind puede ser: alarm, wifi, sync, weather, location, brightness.
-        """
-        img  = Image.new("RGB", (W, H), BG)
+    def render_focus(self, title, subtitle, kind="", value=None) -> Image.Image:
+        img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
-        draw.ellipse([5, 5, W-5, H-5], outline=PURPLE, width=3)
 
-        # Icono central
-        draw_menu_icon(draw, CX-30, CY-60, 60, kind)
+        icon_size = 50
+        draw_menu_icon(draw, CX - icon_size // 2, CY - 80, icon_size, kind)
 
-        _text_center(draw, CY+10,  title.upper(), F.date_top, WHITE)
+        _text_center(draw, CY - 10, title.upper(), F.date_top, WHITE)
+
         if value:
-            _text_center(draw, CY+35, str(value), F.temp_big, CYAN)
-        _text_center(draw, H-48, subtitle, F.weather_sub, DIM_WHITE)
-        return img
+            _text_center(draw, CY + 25, str(value).upper(), F.temp_big, CYAN)
 
-    # ── Alarma sonando ────────────────────────────────────────────────────────
+        if subtitle:
+            _text_center(draw, CY + 60, subtitle, F.small, DIM_WHITE)
+
+        return img
 
     def render_alarm_ringing(self) -> Image.Image:
-        img  = Image.new("RGB", (W, H), BG)
+        img = Image.new("RGB", (W, H), (200, 0, 0) if int(time.time() * 2) % 2 == 0 else BG)
         draw = ImageDraw.Draw(img)
-        col  = CYAN if int(time.time() * 4) % 2 == 0 else AMBER
-        draw.ellipse([10, 10, W-10, H-10], outline=col, width=10)
-        _text_center(draw, CY-50, "\u23f0", F.clock, col)   # emoji reloj
-        _text_center(draw, CY+10, "ALARMA", F.clock, WHITE)
+        _text_center(draw, CY - 25, "ALARMA", F.alarm_ringing, WHITE)
+        _text_center(draw, CY + 30, "PULSA PARA DETENER", F.small, WHITE)
         return img
