@@ -4,7 +4,10 @@
 # Última validación: 2026-05-03
 
 # ── Hardware SPI ────────────────────────────────────────────────────────────
-# SPI0: GC9A01 en spi0.0 (CE0/GPIO8), ST7789 en spi0.1 (CE1/GPIO7)
+# SPI0 con 2 dispositivos:
+#   spidev0.0 → GC9A01 redonda, CS hardware CE0 (GPIO8)
+#   spidev0.1 → ST7789 rectangular, CS MANUAL en GPIO16 (pin 36)
+#               NO usar CE1/GPIO7 como CS real.
 dtparam=spi=on
 
 # ── I2C ─────────────────────────────────────────────────────────────────────
