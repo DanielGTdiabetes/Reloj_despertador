@@ -20,7 +20,7 @@ import numpy as np
 import RPi.GPIO as GPIO
 from PIL import Image, ImageDraw
 
-from .spi_bus import SpiBus
+from .spi_bus import SpiBus, SpiDeviceProfile
 
 
 class GC9A01:
@@ -47,6 +47,7 @@ class GC9A01:
     CMD_INTERRE2 = 0xEF
 
     SPI_SPEED_HZ = 32_000_000
+    SPI_NAME = "gc9a01"
 
     def __init__(
         self,
@@ -65,14 +66,13 @@ class GC9A01:
         self.bl_pin = bl_pin
 
         self._bus = SpiBus.instance()
+        self._bus.register_device(SpiDeviceProfile(self.SPI_NAME, spi_port, spi_device, cs_pin, init_speed_hz=8_000_000, frame_speed_hz=self.SPI_SPEED_HZ))
         self._initialized = False
         self._first_frame_ok = False
         self._pwm = None
 
-        GPIO.setup(self.cs_pin, GPIO.OUT)
         GPIO.setup(self.dc_pin, GPIO.OUT)
         GPIO.setup(self.rst_pin, GPIO.OUT)
-        GPIO.output(self.cs_pin, GPIO.HIGH)
         if self.bl_pin is not None:
             GPIO.setup(self.bl_pin, GPIO.OUT)
             # Bajamos a 200Hz para máxima estabilidad del software PWM
@@ -89,16 +89,13 @@ class GC9A01:
     # ── SPI helpers ──────────────────────────────────────────────────────────
 
     def _cmd(self, cmd: int) -> None:
-        with self._bus.transaction(self.spi_port, self.spi_device, self.SPI_SPEED_HZ) as spi:
+        with self._bus.transaction(self.SPI_NAME) as spi:
             GPIO.output(self.dc_pin, GPIO.LOW)
-            GPIO.output(self.cs_pin, GPIO.LOW)
             spi.writebytes([cmd])
-            GPIO.output(self.cs_pin, GPIO.HIGH)
 
     def _data(self, data) -> None:
-        with self._bus.transaction(self.spi_port, self.spi_device, self.SPI_SPEED_HZ) as spi:
+        with self._bus.transaction(self.SPI_NAME) as spi:
             GPIO.output(self.dc_pin, GPIO.HIGH)
-            GPIO.output(self.cs_pin, GPIO.LOW)
             if isinstance(data, int):
                 spi.writebytes([data])
             else:
@@ -109,7 +106,6 @@ class GC9A01:
                 except AttributeError:
                     for i in range(0, len(payload), 4096):
                         spi.writebytes(list(payload[i:i + 4096]))
-            GPIO.output(self.cs_pin, GPIO.HIGH)
 
     def _cd(self, cmd: int, data=None) -> None:
         self._cmd(cmd)
@@ -117,13 +113,12 @@ class GC9A01:
             self._data(data if isinstance(data, (list, bytes, bytearray)) else [data])
 
     def _read(self, cmd: int, length: int) -> bytes:
-        with self._bus.transaction(self.spi_port, self.spi_device, self.SPI_SPEED_HZ) as spi:
+        with self._bus.transaction(self.SPI_NAME) as spi:
             GPIO.output(self.dc_pin, GPIO.LOW)
             GPIO.output(self.cs_pin, GPIO.LOW)
             spi.writebytes([cmd])
             GPIO.output(self.dc_pin, GPIO.HIGH)
             rx = spi.readbytes(length + 1)  # 1 byte dummy
-            GPIO.output(self.cs_pin, GPIO.HIGH)
         return bytes(rx[1:])
 
     # ── Init ─────────────────────────────────────────────────────────────────
