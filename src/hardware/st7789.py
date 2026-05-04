@@ -58,7 +58,7 @@ class ST7789Display:
     CMD_FRCTR2 = 0xC6
     CMD_PWCTRL1 = 0xD0
 
-    SPI_SPEED_HZ = 32_000_000
+    SPI_SPEED_HZ = 4_000_000
 
     def __init__(
         self,
