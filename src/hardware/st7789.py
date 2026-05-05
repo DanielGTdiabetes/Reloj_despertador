@@ -52,21 +52,24 @@ class ST7789Display:
 
         self._init_with_retry()
 
-    def _cmd(self, cmd: int, *, init_phase: bool = False) -> None:
+    def _write_cmd_data(self, cmd: int, data=None, *, init_phase: bool = False) -> None:
+        """Envía comando y datos en UNA sola transacción SPI (CS continuo)."""
         with self._bus.transaction(self.SPI_NAME, init_phase=init_phase) as spi:
             GPIO.output(self.dc_pin, GPIO.LOW)
             spi.writebytes([cmd])
 
-    def _data(self, data, *, init_phase: bool = False) -> None:
-        payload = [data] if isinstance(data, int) else data
-        with self._bus.transaction(self.SPI_NAME, init_phase=init_phase) as spi:
-            GPIO.output(self.dc_pin, GPIO.HIGH)
-            spi.writebytes2(payload if isinstance(payload, (bytes, bytearray, list)) else list(payload))
+            if data is not None:
+                GPIO.output(self.dc_pin, GPIO.HIGH)
+                payload = [data] if isinstance(data, int) else data
+                spi.writebytes2(
+                    payload if isinstance(payload, (bytes, bytearray, list)) else list(payload)
+                )
+
+    def _cmd(self, cmd: int, *, init_phase: bool = False) -> None:
+        self._write_cmd_data(cmd, None, init_phase=init_phase)
 
     def _cd(self, cmd: int, data=None, *, init_phase: bool = False) -> None:
-        self._cmd(cmd, init_phase=init_phase)
-        if data is not None:
-            self._data(data, init_phase=init_phase)
+        self._write_cmd_data(cmd, data, init_phase=init_phase)
 
     def _init_with_retry(self) -> None:
         for attempt in (1, 2):
@@ -104,8 +107,15 @@ class ST7789Display:
             self.framebuffer = image.resize((self.WIDTH, self.HEIGHT), Image.LANCZOS).convert("RGB")
         arr = np.asarray(self.framebuffer, dtype=np.uint8)
         rgb565 = (((arr[..., 0].astype(np.uint16) & 0xF8) << 8) | ((arr[..., 1].astype(np.uint16) & 0xFC) << 3) | (arr[..., 2].astype(np.uint16) >> 3))
-        self._set_window(); self._cmd(self.CMD_RAMWR)
-        self._data(rgb565.astype(">u2").tobytes())
+
+        self._set_window()
+
+        with self._bus.transaction(self.SPI_NAME, init_phase=False) as spi:
+            GPIO.output(self.dc_pin, GPIO.LOW)
+            spi.writebytes([self.CMD_RAMWR])
+            GPIO.output(self.dc_pin, GPIO.HIGH)
+            spi.writebytes2(rgb565.astype(">u2").tobytes())
+
         if not self._first_frame_ok:
             self._first_frame_ok = True
             self._pwm.ChangeDutyCycle(20)

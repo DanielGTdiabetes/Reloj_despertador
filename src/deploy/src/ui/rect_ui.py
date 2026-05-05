@@ -48,7 +48,7 @@ class RectUIScreen:
 
     # ── Pronóstico 4 días (sin hoy) ───────────────────────────────────────────
 
-    def render_forecast(self, forecast_data: list) -> Image.Image:
+    def render_forecast(self, forecast_data: list, period=None) -> Image.Image:
         img  = Image.new("RGB", (W, H), BG)
         days = forecast_data[1:5]        # saltar el día 0 (hoy)
         n    = 4

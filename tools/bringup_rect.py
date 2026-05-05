@@ -1,10 +1,13 @@
 """
-Bring-up aislado de la pantalla rectangular ST7789P3.
+Bring-up aislado de la pantalla rectangular ST7789P3 — VERSIÓN DIAGNÓSTICO.
 
 Uso (en la Pi, con reloj.service parado):
     sudo systemctl stop reloj.service
     cd /home/dani/reloj_despertador
     python3 tools/bringup_rect.py
+    python3 tools/bringup_rect.py --hold        # espera 30s antes de cleanup
+    python3 tools/bringup_rect.py --swap-offsets # prueba offsets invertidos
+    python3 tools/bringup_rect.py --slow-spi     # init y frames a 1 MHz
 
 Salida esperada:
     [ST7789] RDDID = XXXXXX  (si HW responde; suele ser 000000 en este panel)
@@ -18,6 +21,7 @@ RST=GPIO27 (cable no llega al panel).
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 import time
@@ -41,8 +45,23 @@ COLORS = [
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Bringup ST7789 con opciones de diagnóstico")
+    parser.add_argument("--hold", action="store_true", help="Espera 30s antes de cleanup para observar")
+    parser.add_argument("--swap-offsets", action="store_true", help="Prueba col_offset=82, row_offset=18")
+    parser.add_argument("--slow-spi", action="store_true", help="Usa 1 MHz para init y frames")
+    args = parser.parse_args()
+
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
+
+    col_offset = 82 if args.swap_offsets else 18
+    row_offset = 18 if args.swap_offsets else 82
+
+    print(f"[bringup_rect] spi_port=0, spi_device=1, cs_pin=16")
+    print(f"[bringup_rect] dc=22, rst=27, bl=23")
+    print(f"[bringup_rect] col_offset={col_offset}, row_offset={row_offset}")
+    print(f"[bringup_rect] slow_spi={args.slow_spi}")
+    print(f"[bringup_rect] hold={args.hold}")
 
     display = None
     try:
@@ -53,17 +72,31 @@ def main() -> int:
             dc_pin=22,
             rst_pin=27,
             bl_pin=23,
-            col_offset=18,
-            row_offset=82,
+            col_offset=col_offset,
+            row_offset=row_offset,
         )
+
+        if args.slow_spi:
+            # Forzar velocidad baja en el perfil SPI
+            bus = display._bus
+            for profile in bus._profiles.values():
+                object.__setattr__(profile, "init_speed_hz", 1_000_000)
+                object.__setattr__(profile, "frame_speed_hz", 1_000_000)
+            print("[bringup_rect] SPI speed forzado a 1 MHz")
 
         for name, color in COLORS:
             img = Image.new("RGB", (display.WIDTH, display.HEIGHT), color)
-            print(f"[bringup_rect] {name}")
+            print(f"[bringup_rect] mostrando {name}...")
             display.display(img)
             time.sleep(1.0)
 
-        print("[bringup_rect] OK")
+        print("[bringup_rect] secuencia de colores OK")
+
+        if args.hold:
+            print(f"[bringup_rect] HOLD: esperando 30s antes de cleanup...")
+            print(f"[bringup_rect] Observa la pantalla. Debería mostrar negro (último color).")
+            time.sleep(30)
+
         return 0
     except Exception:
         import traceback
@@ -71,8 +104,10 @@ def main() -> int:
         return 1
     finally:
         if display:
+            print("[bringup_rect] llamando a display.cleanup()...")
             display.cleanup()
         GPIO.cleanup()
+        print("[bringup_rect] GPIO cleanup done")
 
 
 if __name__ == "__main__":

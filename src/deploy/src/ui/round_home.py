@@ -209,7 +209,7 @@ class RoundHomeScreen:
     # ── Pantalla de noche (luna) ──────────────────────────────────────────────
 
     def render_night(self, now, moon: dict, alarm: dict,
-                     sun_info: dict = None) -> Image.Image:
+                     sun_info: dict = None, battery=None) -> Image.Image:
         """
         Pantalla de noche: fondo estrellado, arco nocturno, hora, fase lunar,
         nombre de fase, badge alarma.
