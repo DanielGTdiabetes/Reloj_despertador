@@ -28,7 +28,7 @@ class ST7789Display:
     CMD_MADCTL = 0x36
     CMD_COLMOD = 0x3A
 
-    def __init__(self, spi_port=0, spi_device=0, cs_pin=16, dc_pin=22, rst_pin=27, bl_pin=23, col_offset=82, row_offset=18):
+    def __init__(self, spi_port=0, spi_device=1, cs_pin=16, dc_pin=22, rst_pin=27, bl_pin=23, col_offset=82, row_offset=18):
         self.spi_port = spi_port
         self.spi_device = spi_device
         self.cs_pin = cs_pin

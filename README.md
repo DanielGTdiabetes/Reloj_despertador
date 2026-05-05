@@ -1,15 +1,22 @@
 # Reloj Despertador - Raspberry Pi Zero W
 
-## Causa probable del fallo de pantalla blanca ST7789
-Tras optimizar el arranque, el servicio puede iniciar antes de que SPI/GPIO estén estables. Si el CS manual (GPIO16) o el reset/backlight de la ST7789 quedan en estado no seguro durante boot, la pantalla puede quedarse en blanco aunque el código antiguo sea correcto.
+## Arquitectura SPI
+
+Ambas pantallas comparten SPI0:
+- **GC9A01** (redonda 240x240): `/dev/spidev0.0`, CS manual GPIO8.
+- **ST7789** (rectangular 284x76): `/dev/spidev0.1`, CS manual GPIO16.
+
+La ST7789 usa `spi_device=1` con `no_cs=True` y CS manual por GPIO16.
+Requiere `dtoverlay=spi0-2cs` en config.txt para que exista `/dev/spidev0.1`.
+NO usar `spi0.0` para la ST7789.
 
 ## Cambios de robustez aplicados
 - Bus SPI centralizado con lock global y transacciones seguras (`try/finally`, todos los CS en HIGH al salir).
 - Inicialización temprana de CS conocidos y perfiles por dispositivo.
 - ST7789 con init robusta, delays mayores, backlight apagado durante init y reintento automático.
+- `no_cs=True` con fallo explícito: si el kernel no permite desactivar CS hardware, la app aborta con `RuntimeError`.
 - Validación de configuración de pantallas al arranque (dimensiones/pines duplicados/uso I2C reservado).
 - Modo diagnóstico para arrancar solo ST7789 (`boot.diag_only_rect=true`).
-- `startup_delay_seconds` configurable para mitigar carreras de boot.
 - Servicio systemd con `preflight` de `/dev/spidev*`, `/dev/gpiomem`, e I2C opcional.
 
 ## Tabla de pines (auditada)
@@ -31,17 +38,25 @@ Tras optimizar el arranque, el servicio puede iniciar antes de que SPI/GPIO est�
 ## Configuración recomendada de boot
 Usar en `/boot/firmware/config.txt` (o `/boot/config.txt` según distro):
 - `dtparam=spi=on`
+- `dtoverlay=spi0-2cs`
 - `dtparam=i2c_arm=on`
 - `dtoverlay=max98357a`
 - `dtoverlay=watchdog=on`
 
 ## Configuración app (extracto)
 `config/config.json`:
+- `displays.rect.spi_device=1` (NO 0)
 - `displays.rect.col_offset=82`
 - `displays.rect.row_offset=18`
 - `boot.startup_delay_seconds=3`
 - `boot.diag_only_rect=false`
 - `ups.enabled / i2c_bus / i2c_address / poll_interval`
+
+## Diagnóstico SPI
+```bash
+python3 tools/spi_diag.py
+```
+Verifica: `/dev/spidev0.0`, `/dev/spidev0.1`, GPIO16 disponible, overlay correcto.
 
 ## Test mínimo ST7789 solo
 ```bash
@@ -75,7 +90,7 @@ sudo systemctl restart reloj.service
 
 ## Checklist tras reinicio en frío
 - Aparece log `[BOOT] preflight OK`.
-- Aparecen logs `[GC9A01] init OK` y `[ST7789] init OK`.
+- Aparecen logs `[ST7789] init OK` y `[GC9A01] init OK` (en ese orden).
 - ST7789 sale de blanco y pinta primer frame.
 - Encoder responde.
 - Audio I2S sigue operativo.

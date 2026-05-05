@@ -55,8 +55,10 @@ class SpiBus:
             spi.open(port, device)
             try:
                 spi.no_cs = True
-            except Exception:
-                pass
+            except Exception as exc:
+                raise RuntimeError(
+                    f"[SPI] no se pudo activar no_cs en spi{port}.{device}: {exc}"
+                ) from exc
             self._handles[key] = spi
         return spi
 

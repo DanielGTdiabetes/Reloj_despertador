@@ -8,7 +8,9 @@
 #   spidev0.0 → GC9A01 redonda, CS hardware CE0 (GPIO8)
 #   spidev0.1 → ST7789 rectangular, CS MANUAL en GPIO16 (pin 36)
 #               NO usar CE1/GPIO7 como CS real.
+#               REQUIERE dtoverlay=spi0-2cs para que exista /dev/spidev0.1
 dtparam=spi=on
+dtoverlay=spi0-2cs
 
 # ── I2C ─────────────────────────────────────────────────────────────────────
 dtparam=i2c_arm=on

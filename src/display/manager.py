@@ -37,8 +37,8 @@ class DisplayManager:
             print("[BOOT] diag_only_rect enabled")
             self._init_rect()
             return
-        self._init_round()
         self._init_rect()
+        self._init_round()
 
     def _init_round(self) -> None:
         if self._flags.disable_round:

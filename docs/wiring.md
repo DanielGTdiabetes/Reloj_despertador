@@ -2,19 +2,19 @@
 
 ## Resumen
 
-Ambas pantallas usan SPI0 con CS manual por GPIO:
+Ambas pantallas comparten SPI0 con CS manual por GPIO:
 
-- GC9A01 redonda: CS en GPIO8 (CE0 hardware).
-- ST7789P3 rectangular: CS en **GPIO16, pin físico 36** (GPIO normal, NO CE hardware).
+- GC9A01 redonda: usa `/dev/spidev0.0`, CS manual en GPIO8 (CE0).
+- ST7789 rectangular: usa `/dev/spidev0.1`, CS manual en **GPIO16, pin físico 36** (GPIO normal, NO CE hardware).
 
 > [!IMPORTANT]
-> **CAMBIO CRÍTICO 2026-05-02:** El CS del ST7789 se movió de GPIO7 (pin 26, CE1) a
-> **GPIO16 (pin 36, GPIO normal)**. GPIO7 causaba un glitch en cold boot porque el
-> kernel lo inicializa como CE1 al cargar el overlay SPI aunque no lo usemos.
-> Con GPIO16 el kernel no lo toca y el bug de pantalla blanca en cold boot desaparece.
->
-> El overlay de boot es ahora `dtoverlay=spi0-1cs` (solo expone CE0).
-> Ambas pantallas usan `spi_device: 0` porque solo existe `/dev/spidev0.0`.
+> **CONFIGURACIÓN DEFINITIVA (2026-05-05):**
+> - ST7789 usa `spi_device=1` → `/dev/spidev0.1` como endpoint SPI.
+> - CS real = GPIO16 (manual), NO GPIO7/CE1.
+> - `no_cs=True` en spidev desactiva el CS hardware del kernel; el CS lo controla Python por GPIO.
+> - `no_cs=True` NO convierte spidev0.0 y spidev0.1 en equivalentes: cada device es un handle distinto al driver SPI del kernel.
+> - Overlay requerido: `dtoverlay=spi0-2cs` (debe existir `/dev/spidev0.1`).
+> - NO usar `spi0.0` para ST7789.
 
 ## GC9A01 - Pantalla Redonda 240x240
 
@@ -60,7 +60,7 @@ Config:
 ```json
 {
   "spi_port": 0,
-  "spi_device": 0,
+  "spi_device": 1,
   "cs_pin": 16,
   "dc_pin": 22,
   "rst_pin": 27,
@@ -75,8 +75,11 @@ Parametros criticos del driver:
 | Parametro | Valor |
 |---|---:|
 | Tamano logico | 284x76 |
-| SPI | spi0.0 (unico device) |
-| Velocidad | 32 MHz |
+| SPI | spi0.1 (`/dev/spidev0.1`) |
+| CS manual | GPIO16 |
+| no_cs | True (CS por GPIO, no kernel) |
+| Velocidad init | 4 MHz |
+| Velocidad frame | 24 MHz |
 | Secuencia init | BuyDisplay / ER-TFTM2.25-1 |
 | MADCTL | 0xA8 |
 | COLMOD | 0x05 |
@@ -128,16 +131,19 @@ Ver documentación completa en `docs/ups_hat.md`.
 
 ## /boot/firmware/config.txt
 
-Estado correcto (tras fix cold boot):
+Estado correcto:
 
 ```ini
-dtoverlay=spi0-1cs
+dtparam=spi=on
+dtoverlay=spi0-2cs
 dtparam=i2c_arm=on
 dtoverlay=max98357a
 camera_auto_detect=0
 display_auto_detect=0
 ```
 
-No usar `dtparam=spi=on` — activa CE0 y CE1, y el kernel toca GPIO7 en boot.
-No usar `dtoverlay=spi0-2cs` — mismo problema.
-No usar `dtoverlay=spi1-3cs` — GPIO21 en conflicto con PCM_DOUT del MAX98357A.
+Notas:
+- `dtoverlay=spi0-2cs` crea `/dev/spidev0.0` y `/dev/spidev0.1`.
+- `dtparam=spi=on` también activa SPI0; `spi0-2cs` asegura que ambos CE existan.
+- NO usar `dtoverlay=spi0-1cs` — solo crea `/dev/spidev0.0`, la ST7789 necesita `/dev/spidev0.1`.
+- NO usar `dtoverlay=spi1-3cs` — GPIO21 en conflicto con PCM_DOUT del MAX98357A.
