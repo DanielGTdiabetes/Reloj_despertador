@@ -27,6 +27,7 @@ apt-get install -y \
   python3-ephem \
   python3-tz \
   python3-ntplib \
+  python3-smbus2 \
   python3-venv \
   i2c-tools \
   alsa-utils \
@@ -46,6 +47,7 @@ touch "$BOOT_CONFIG"
 sed -i 's/^[[:space:]]*dtparam=audio=on/# dtparam=audio=on/' "$BOOT_CONFIG"
 
 grep -q '^dtparam=spi=on' "$BOOT_CONFIG" || echo 'dtparam=spi=on' >> "$BOOT_CONFIG"
+grep -q '^dtparam=i2c_arm=on' "$BOOT_CONFIG" || echo 'dtparam=i2c_arm=on' >> "$BOOT_CONFIG"
 grep -q '^dtparam=i2s=on' "$BOOT_CONFIG" || echo 'dtparam=i2s=on' >> "$BOOT_CONFIG"
 grep -q '^dtoverlay=max98357a' "$BOOT_CONFIG" || echo 'dtoverlay=max98357a' >> "$BOOT_CONFIG"
 
@@ -69,6 +71,7 @@ modules = [
     "pytz",
     "dateutil",
     "ntplib",
+    "smbus2",
 ]
 
 missing = []
