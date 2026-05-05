@@ -8,15 +8,6 @@ Uso (en la Pi, con reloj.service parado):
     python3 tools/bringup_rect.py --hold        # espera 30s antes de cleanup
     python3 tools/bringup_rect.py --swap-offsets # prueba offsets invertidos
     python3 tools/bringup_rect.py --slow-spi     # init y frames a 1 MHz
-
-Salida esperada:
-    [ST7789] RDDID = XXXXXX  (si HW responde; suele ser 000000 en este panel)
-    Secuencia visual: rojo → verde → azul → blanco → negro (1s cada uno).
-
-Si no se ve nada y la backlight queda apagada → init falló.
-Si se ve solo backlight blanca → el chip no respondió al init pese a que la
-secuencia SPI no lanzó error. Suele apuntar a fallo HW de DC=GPIO22 o
-RST=GPIO27 (cable no llega al panel).
 """
 
 from __future__ import annotations
@@ -27,13 +18,9 @@ import sys
 import time
 
 import RPi.GPIO as GPIO
+import spidev
 from PIL import Image
-
-THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-SRC_DIR = os.path.abspath(os.path.join(THIS_DIR, "..", "src"))
-sys.path.insert(0, SRC_DIR)
-
-from hardware.st7789 import ST7789Display  # noqa: E402
+import numpy as np
 
 COLORS = [
     ("rojo",   (255, 0, 0)),
@@ -63,55 +50,87 @@ def main() -> int:
     print("[BRINGUP] DC GPIO22")
     print("[BRINGUP] RST GPIO27")
     print("[BRINGUP] BL GPIO23 active LOW")
-    print(f"[bringup_rect] col_offset={col_offset}, row_offset={row_offset}")
-    print(f"[bringup_rect] slow_spi={args.slow_spi}")
-    print(f"[bringup_rect] hold={args.hold}")
 
-    original_output = GPIO.output
-    def patched_output(pin, state):
-        if pin == 16:
-            state_str = "HIGH" if state else "LOW"
-            print(f"[BRINGUP] CS GPIO16 state changed to: {state_str}")
-        original_output(pin, state)
-    GPIO.output = patched_output
+    CS_PIN = 16
+    DC_PIN = 22
+    RST_PIN = 27
+    BL_PIN = 23
 
-    GPIO.setup(22, GPIO.OUT, initial=GPIO.HIGH)
-    print(f"[BRINGUP] DC GPIO22 state before init: {GPIO.input(22)}")
+    GPIO.setup(CS_PIN, GPIO.OUT, initial=GPIO.HIGH)
+    GPIO.setup(DC_PIN, GPIO.OUT, initial=GPIO.HIGH)
+    GPIO.setup(RST_PIN, GPIO.OUT, initial=GPIO.HIGH)
+    GPIO.setup(BL_PIN, GPIO.OUT, initial=GPIO.HIGH)
 
-    display = None
+    pwm = GPIO.PWM(BL_PIN, 200)
+    pwm.start(100)
+
+    spi = spidev.SpiDev()
+    spi.open(0, 0)
+    spi.max_speed_hz = 1000000 if args.slow_spi else 24000000
+    spi.mode = 0
+    spi.no_cs = True
+
+    def write_cmd(cmd, data=None):
+        GPIO.output(CS_PIN, GPIO.LOW)
+        GPIO.output(DC_PIN, GPIO.LOW)
+        spi.writebytes([cmd])
+        if data:
+            GPIO.output(DC_PIN, GPIO.HIGH)
+            spi.writebytes(list(data))
+        GPIO.output(CS_PIN, GPIO.HIGH)
+
+    def set_window(xs, ys, xe, ye):
+        write_cmd(0x2A, [xs >> 8, xs & 0xFF, xe >> 8, xe & 0xFF])
+        write_cmd(0x2B, [ys >> 8, ys & 0xFF, ye >> 8, ye & 0xFF])
+
     try:
-        display = ST7789Display(
-            spi_port=0,
-            spi_device=0,
-            cs_pin=16,
-            dc_pin=22,
-            rst_pin=27,
-            bl_pin=23,
-            col_offset=col_offset,
-            row_offset=row_offset,
-        )
+        # Init Sequence
+        GPIO.output(RST_PIN, GPIO.HIGH)
+        time.sleep(0.02)
+        GPIO.output(RST_PIN, GPIO.LOW)
+        time.sleep(0.12)
+        GPIO.output(RST_PIN, GPIO.HIGH)
+        time.sleep(0.2)
 
-        print(f"[BRINGUP] DC GPIO22 state after init: {GPIO.input(22)}")
+        write_cmd(0x01) # SWRESET
+        time.sleep(0.18)
+        write_cmd(0x11) # SLPOUT
+        time.sleep(0.15)
+        
+        write_cmd(0x36, [0xA8]) # MADCTL
+        write_cmd(0x3A, [0x05]) # COLMOD
+        write_cmd(0x21) # INVON
+        write_cmd(0x13) # NORON
+        time.sleep(0.01)
+        write_cmd(0x29) # DISPON
+        time.sleep(0.1)
 
-        if args.slow_spi:
-            # Forzar velocidad baja en el perfil SPI
-            bus = display._bus
-            for profile in bus._profiles.values():
-                object.__setattr__(profile, "init_speed_hz", 1_000_000)
-                object.__setattr__(profile, "frame_speed_hz", 1_000_000)
-            print("[bringup_rect] SPI speed forzado a 1 MHz")
+        WIDTH = 284
+        HEIGHT = 76
 
         for name, color in COLORS:
-            img = Image.new("RGB", (display.WIDTH, display.HEIGHT), color)
+            img = Image.new("RGB", (WIDTH, HEIGHT), color)
+            arr = np.asarray(img, dtype=np.uint8)
+            rgb565 = (((arr[..., 0].astype(np.uint16) & 0xF8) << 8) | ((arr[..., 1].astype(np.uint16) & 0xFC) << 3) | (arr[..., 2].astype(np.uint16) >> 3))
+            
+            set_window(col_offset, row_offset, col_offset + WIDTH - 1, row_offset + HEIGHT - 1)
+            
+            GPIO.output(CS_PIN, GPIO.LOW)
+            GPIO.output(DC_PIN, GPIO.LOW)
+            spi.writebytes([0x2C]) # RAMWR
+            GPIO.output(DC_PIN, GPIO.HIGH)
+            spi.writebytes2(rgb565.astype(">u2").tobytes())
+            GPIO.output(CS_PIN, GPIO.HIGH)
+
+            pwm.ChangeDutyCycle(20) # Turn backlight on
+            
             print(f"[bringup_rect] mostrando {name}...")
-            display.display(img)
             time.sleep(1.0)
 
         print("[bringup_rect] secuencia de colores OK")
 
         if args.hold:
             print(f"[bringup_rect] HOLD: esperando 30s antes de cleanup...")
-            print(f"[bringup_rect] Observa la pantalla. Debería mostrar negro (último color).")
             time.sleep(30)
 
         return 0
@@ -120,12 +139,13 @@ def main() -> int:
         traceback.print_exc()
         return 1
     finally:
-        if display:
-            print("[bringup_rect] llamando a display.cleanup()...")
-            display.cleanup()
+        write_cmd(0x28) # DISPOFF
+        write_cmd(0x10) # SLPIN
+        pwm.ChangeDutyCycle(100)
+        pwm.stop()
+        spi.close()
         GPIO.cleanup()
         print("[bringup_rect] GPIO cleanup done")
-
 
 if __name__ == "__main__":
     sys.exit(main())
