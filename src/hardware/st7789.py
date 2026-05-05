@@ -43,7 +43,7 @@ class ST7789Display:
         self.madctl_val = madctl_val
         self.colmod_val = colmod_val
         self._bus = SpiBus.instance()
-        self._bus.register_device(SpiDeviceProfile(self.SPI_NAME, spi_port, spi_device, cs_pin, init_speed_hz=4_000_000, frame_speed_hz=24_000_000))
+        self._bus.register_device(SpiDeviceProfile(self.SPI_NAME, spi_port, spi_device, cs_pin, init_speed_hz=4_000_000, frame_speed_hz=16_000_000))
 
         GPIO.setup(self.dc_pin, GPIO.OUT, initial=GPIO.HIGH)
         GPIO.setup(self.rst_pin, GPIO.OUT, initial=GPIO.HIGH)
