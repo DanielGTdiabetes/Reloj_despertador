@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -e
+set -u
+set -o pipefail
 
 APP_DIR="/home/dani/reloj_despertador"
 SERVICE_SRC="$APP_DIR/scripts/reloj.service"
