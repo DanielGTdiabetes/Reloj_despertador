@@ -57,17 +57,30 @@ def main() -> int:
     col_offset = 82 if args.swap_offsets else 18
     row_offset = 18 if args.swap_offsets else 82
 
-    print(f"[bringup_rect] spi_port=0, spi_device=1, cs_pin=16")
+    print("[BRINGUP] opening /dev/spidev0.0")
+    print("[BRINGUP] manual CS GPIO16")
+    print("[BRINGUP] spi.no_cs=True")
     print(f"[bringup_rect] dc=22, rst=27, bl=23")
     print(f"[bringup_rect] col_offset={col_offset}, row_offset={row_offset}")
     print(f"[bringup_rect] slow_spi={args.slow_spi}")
     print(f"[bringup_rect] hold={args.hold}")
 
+    original_output = GPIO.output
+    def patched_output(pin, state):
+        if pin == 16:
+            state_str = "HIGH" if state else "LOW"
+            print(f"[BRINGUP] CS GPIO16 state changed to: {state_str}")
+        original_output(pin, state)
+    GPIO.output = patched_output
+
+    GPIO.setup(22, GPIO.OUT, initial=GPIO.HIGH)
+    print(f"[BRINGUP] DC GPIO22 state before init: {GPIO.input(22)}")
+
     display = None
     try:
         display = ST7789Display(
             spi_port=0,
-            spi_device=1,
+            spi_device=0,
             cs_pin=16,
             dc_pin=22,
             rst_pin=27,
@@ -75,6 +88,8 @@ def main() -> int:
             col_offset=col_offset,
             row_offset=row_offset,
         )
+
+        print(f"[BRINGUP] DC GPIO22 state after init: {GPIO.input(22)}")
 
         if args.slow_spi:
             # Forzar velocidad baja en el perfil SPI
