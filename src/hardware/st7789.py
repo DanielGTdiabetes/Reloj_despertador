@@ -28,7 +28,9 @@ class ST7789Display:
     CMD_MADCTL = 0x36
     CMD_COLMOD = 0x3A
 
-    def __init__(self, spi_port=0, spi_device=1, cs_pin=16, dc_pin=22, rst_pin=27, bl_pin=23, col_offset=82, row_offset=18):
+    def __init__(self, spi_port=0, spi_device=1, cs_pin=16, dc_pin=22, rst_pin=27, bl_pin=23, 
+                 col_offset=82, row_offset=18, 
+                 init_extended=False, madctl_val=0xA8, colmod_val=0x05):
         self.spi_port = spi_port
         self.spi_device = spi_device
         self.cs_pin = cs_pin
@@ -37,6 +39,9 @@ class ST7789Display:
         self.bl_pin = bl_pin
         self.col_offset = col_offset
         self.row_offset = row_offset
+        self.init_extended = init_extended
+        self.madctl_val = madctl_val
+        self.colmod_val = colmod_val
         self._bus = SpiBus.instance()
         self._bus.register_device(SpiDeviceProfile(self.SPI_NAME, spi_port, spi_device, cs_pin, init_speed_hz=4_000_000, frame_speed_hz=24_000_000))
 
@@ -60,10 +65,14 @@ class ST7789Display:
 
             if data is not None:
                 GPIO.output(self.dc_pin, GPIO.HIGH)
-                payload = [data] if isinstance(data, int) else data
-                spi.writebytes2(
-                    payload if isinstance(payload, (bytes, bytearray, list)) else list(payload)
-                )
+                if isinstance(data, int):
+                    payload = [data]
+                else:
+                    payload = list(data)
+                
+                # spidev.writebytes2 es más seguro y predecible si SIEMPRE se le pasan bytes.
+                # Pasar listas (list of ints) puede fallar silenciosamente en algunas versiones de kernel.
+                spi.writebytes2(bytes(payload))
 
     def _cmd(self, cmd: int, *, init_phase: bool = False) -> None:
         self._write_cmd_data(cmd, None, init_phase=init_phase)
@@ -83,18 +92,33 @@ class ST7789Display:
         raise RuntimeError("[ST7789] init failed after retries")
 
     def _init_display(self) -> None:
-        GPIO.output(self.bl_pin, GPIO.HIGH)
+        # BUG SUTIL: `bl_pin` ya fue inicializado como PWM en __init__.
+        # Llamar a GPIO.output() en un pin bajo control PWM puede apagarlo silenciosamente o crashear RPi.GPIO.
+        self._pwm.ChangeDutyCycle(100)
+
         GPIO.output(self.rst_pin, GPIO.HIGH); time.sleep(0.02)
         GPIO.output(self.rst_pin, GPIO.LOW); time.sleep(0.12)
         GPIO.output(self.rst_pin, GPIO.HIGH); time.sleep(0.2)
+        
         self._cmd(self.CMD_SWRESET, init_phase=True); time.sleep(0.18)
         self._cmd(self.CMD_SLPOUT, init_phase=True); time.sleep(0.15)
-        self._cd(self.CMD_MADCTL, [0xA8], init_phase=True)
-        self._cd(self.CMD_COLMOD, [0x05], init_phase=True)
-        self._cmd(0x21, init_phase=True)
-        self._cmd(self.CMD_NORON, init_phase=True)
-        self._cmd(self.CMD_DISPON, init_phase=True)
-        time.sleep(0.1)
+        
+        if self.init_extended:
+            self._cd(0xB2, [0x0C, 0x0C, 0x00, 0x33, 0x33], init_phase=True) # PORCTRL
+            self._cd(0xB7, [0x35], init_phase=True) # GCTRL
+            self._cd(0xBB, [0x1F], init_phase=True) # VCOMS
+            self._cd(0xC0, [0x2C], init_phase=True) # LCMCTRL
+            self._cd(0xC2, [0x01], init_phase=True) # VDVVRHEN
+            self._cd(0xC3, [0x12], init_phase=True) # VRHS
+            self._cd(0xC4, [0x20], init_phase=True) # VDVS
+            self._cd(0xC6, [0x0F], init_phase=True) # FRCTRL2
+            self._cd(0xD0, [0xA4, 0xA1], init_phase=True) # PWCTRL1
+
+        self._cd(self.CMD_MADCTL, [self.madctl_val], init_phase=True)
+        self._cd(self.CMD_COLMOD, [self.colmod_val], init_phase=True)
+        self._cmd(0x21, init_phase=True) # INVON
+        self._cmd(self.CMD_NORON, init_phase=True); time.sleep(0.01)
+        self._cmd(self.CMD_DISPON, init_phase=True); time.sleep(0.1)
 
     def _set_window(self) -> None:
         xs, ys = self.col_offset, self.row_offset
