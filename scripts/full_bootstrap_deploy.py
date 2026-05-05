@@ -27,7 +27,13 @@ def upload_dir(sftp, local_dir, remote_dir):
         
         if os.path.isfile(local_path):
             print(f"  Uploading {item}...")
-            sftp.put(local_path, remote_path)
+            if item.endswith('.sh'):
+                with open(local_path, 'rb') as f:
+                    content = f.read().replace(b'\r\n', b'\n')
+                with sftp.file(remote_path, 'wb') as f:
+                    f.write(content)
+            else:
+                sftp.put(local_path, remote_path)
         elif os.path.isdir(local_path):
             upload_dir(sftp, local_path, remote_path)
 
