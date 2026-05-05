@@ -58,9 +58,11 @@ def main() -> int:
     row_offset = 18 if args.swap_offsets else 82
 
     print("[BRINGUP] opening /dev/spidev0.0")
-    print("[BRINGUP] manual CS GPIO16")
+    print("[BRINGUP] using manual CS GPIO16")
     print("[BRINGUP] spi.no_cs=True")
-    print(f"[bringup_rect] dc=22, rst=27, bl=23")
+    print("[BRINGUP] DC GPIO22")
+    print("[BRINGUP] RST GPIO27")
+    print("[BRINGUP] BL GPIO23 active LOW")
     print(f"[bringup_rect] col_offset={col_offset}, row_offset={row_offset}")
     print(f"[bringup_rect] slow_spi={args.slow_spi}")
     print(f"[bringup_rect] hold={args.hold}")
