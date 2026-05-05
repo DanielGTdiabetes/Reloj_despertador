@@ -85,10 +85,16 @@ def full_bootstrap_deploy():
         
         # Stream the output
         while True:
-            line = stdout.readline()
-            if not line:
-                break
-            print(f"[PI] {line.strip()}")
+            try:
+                line = stdout.readline()
+                if not line:
+                    break
+                # Safely print by ignoring characters that can't be displayed in Windows console
+                clean_line = line.strip().encode('ascii', 'ignore').decode('ascii')
+                if clean_line:
+                    print(f"[PI] {clean_line}")
+            except UnicodeDecodeError:
+                continue
             
         # 4. Final check
         print("\n--- DEPLOY COMPLETED ---")
