@@ -75,29 +75,45 @@ echo "[bootstrap] Generating alarm sounds..."
 python3 - <<'PY'
 import wave, struct, math, os
 
-def generate_alarm(filepath):
+def generate_marimba_alarm(filepath):
     sample_rate = 44100
-    duration = 4.0
-    num_samples = int(sample_rate * duration)
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    os.makedirs(os.path.dirname(filepath) if os.path.dirname(filepath) else ".", exist_ok=True)
+    note_freqs = [261.6, 293.7, 329.6, 349.2, 392.0, 440.0, 493.9, 523.3]
+    note_dur, gap_dur, repeats, pause_dur = 0.35, 0.04, 3, 0.6
+
+    def make_note(freq, duration):
+        n = int(sample_rate * duration)
+        samples = []
+        for i in range(n):
+            t = i / sample_rate
+            val = math.sin(2 * math.pi * freq * t) + 0.18 * math.sin(2 * math.pi * freq * 2 * t)
+            attack = min(t / 0.005, 1.0)
+            decay  = math.exp(-4.5 * t / duration)
+            samples.append(struct.pack('<h', int(val * attack * decay * 0.55 * 32767)))
+        return samples
+
+    def make_silence(duration):
+        return [struct.pack('<h', 0)] * int(sample_rate * duration)
+
+    all_samples = []
+    for _ in range(repeats):
+        for freq in note_freqs:
+            all_samples += make_note(freq, note_dur)
+            all_samples += make_silence(gap_dur)
+        all_samples += make_silence(pause_dur)
+
     with wave.open(filepath, 'w') as f:
         f.setnchannels(1)
         f.setsampwidth(2)
         f.setframerate(sample_rate)
-        for i in range(num_samples):
-            t = i / sample_rate
-            val = (math.sin(2 * math.pi * 440 * t) +
-                   math.sin(2 * math.pi * 554 * t) * 0.5 +
-                   math.sin(2 * math.pi * 659 * t) * 0.3)
-            env = min(t / 1.0, 1.0) * min((duration - t) / 0.5, 1.0)
-            sample = int(val * env * 0.5 * 32767)
-            f.writeframesraw(struct.pack('<h', sample))
+        for s in all_samples:
+            f.writeframesraw(s)
     print(f"[bootstrap] Generated {filepath} ({os.path.getsize(filepath)} bytes)")
 
 base = "/home/dani/reloj_despertador/src/assets"
-generate_alarm(f"{base}/sounds/alarm1.wav")
-generate_alarm(f"{base}/sounds/beep.wav")
-generate_alarm(f"{base}/alarm.wav")
+generate_marimba_alarm(f"{base}/sounds/alarm1.wav")
+generate_marimba_alarm(f"{base}/sounds/beep.wav")
+generate_marimba_alarm(f"{base}/alarm.wav")
 PY
 
 echo "[bootstrap] Installing systemd service..."
