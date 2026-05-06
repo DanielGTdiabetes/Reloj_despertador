@@ -35,6 +35,8 @@ apt-get install -y \
   alsa-utils \
   git
 
+echo "[bootstrap] git version: $(git --version)"
+
 echo "[bootstrap] Installing optional Python requirements..."
 pip3 install --break-system-packages -r requirements.txt || \
   echo "[bootstrap] pip requirements skipped; using Raspberry Pi OS packages where available."
