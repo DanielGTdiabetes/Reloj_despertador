@@ -28,7 +28,7 @@ from src.hardware.st7789 import ST7789Display  # noqa: E402
 
 INIT_MODES = [False, True]
 COLMODS = [0x05, 0x55]
-MADCTLS = [0xA8, 0x70, 0x00, 0x60]
+MADCTLS = [0xA0, 0xA8, 0x70, 0x00, 0x60]
 OFFSETS = [(18, 82), (82, 18), (0, 0)]
 
 SPI_PORT = 0

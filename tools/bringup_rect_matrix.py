@@ -107,9 +107,9 @@ def init_st7789(spi):
 
     spi_cmd(spi, CMD_SWRESET); time.sleep(0.18)
     spi_cmd(spi, CMD_SLPOUT); time.sleep(0.15)
-    spi_cd(spi, CMD_MADCTL, [0xA8])
+    spi_cd(spi, CMD_MADCTL, [0xA0])
     spi_cd(spi, CMD_COLMOD, [0x05])
-    spi_cmd(spi, 0x21)  # INVON
+    spi_cmd(spi, 0x20)  # INVOFF
     spi_cmd(spi, CMD_NORON)
     spi_cmd(spi, CMD_DISPON)
     time.sleep(0.10)

@@ -8,7 +8,7 @@ Ambas pantallas comparten SPI0 con CS manual por GPIO:
 - ST7789 rectangular: usa `/dev/spidev0.1`, CS manual en **GPIO16, pin físico 36** (GPIO normal, NO CE hardware).
 
 > [!IMPORTANT]
-> **CONFIGURACIÓN DEFINITIVA (2026-05-05):**
+> **CONFIGURACIÓN DEFINITIVA (2026-05-06):**
 > - ST7789 usa `spi_device=1` → `/dev/spidev0.1` como endpoint SPI.
 > - CS real = GPIO16 (manual), NO GPIO7/CE1.
 > - `no_cs=True` en spidev desactiva el CS hardware del kernel; el CS lo controla Python por GPIO.
@@ -79,10 +79,11 @@ Parametros criticos del driver:
 | CS manual | GPIO16 |
 | no_cs | True (CS por GPIO, no kernel) |
 | Velocidad init | 4 MHz |
-| Velocidad frame | 24 MHz |
+| Velocidad frame | 16 MHz |
 | Secuencia init | BuyDisplay / ER-TFTM2.25-1 |
-| MADCTL | 0xA8 |
+| MADCTL | 0xA0 |
 | COLMOD | 0x05 |
+| Inversión | INVOFF (0x20) |
 | col_offset | 18 |
 | row_offset | 82 |
 | Backlight | Activo LOW |
@@ -137,6 +138,7 @@ Estado correcto:
 dtparam=spi=on
 dtoverlay=spi0-2cs
 dtparam=i2c_arm=on
+dtparam=i2s=on
 dtoverlay=max98357a
 camera_auto_detect=0
 display_auto_detect=0

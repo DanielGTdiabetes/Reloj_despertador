@@ -99,7 +99,7 @@ def audit_boot_config():
         print(f"\n       Último arranque: {out}")
         rc2, out2, _ = run_cmd("date '+%Y-%m-%d %H:%M:%S'")
         if rc2 == 0:
-            print(f       Ahora: {out2}")
+            print(f"       Ahora: {out2}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -347,17 +347,17 @@ def main():
      como comandos.
 
      Esto afecta a TODOS los comandos con parámetros:
-       - MADCTL (0x36) + [0xA8]
+       - MADCTL (0x36) + [0xA0]
        - COLMOD (0x3A) + [0x05]
        - CASET (0x2A) + [xs, xe]
        - RASET (0x2B) + [ys, ye]
        - RAMWR (0x2C) + [framebuffer data]
 
-  2. [POSIBLE] MADCTL = 0xA8 puede no ser correcto para este panel.
-     Verificar con la matriz de pruebas.
+  2. [VERIFICAR] MADCTL: el estado GOLD usa 0xA0.
+     Si el panel se ve girado/colores raros, probar alternativas con la matriz.
 
-  3. [VERIFICAR] Los offsets col_offset=18, row_offset=82 pueden estar
-     invertidos. Probar alternativa col_offset=82, row_offset=18.
+  3. [VERIFICAR] Offsets: el estado GOLD usa col_offset=18, row_offset=82.
+     Si la imagen se ve desplazada/recortada, probar alternativa 82/18.
 
   ACCIONES RECOMENDADAS:
 

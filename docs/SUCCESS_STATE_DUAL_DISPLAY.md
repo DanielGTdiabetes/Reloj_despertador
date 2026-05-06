@@ -1,9 +1,11 @@
 # Estado de Éxito: Pantallas Duales Operativas
-Fecha última actualización: 2026-05-05
+Fecha última actualización: 2026-05-06
 
 ## Referencia Git
 - **Tag**: `v1.0-coldboot-fix`
 - **Estado**: Funcional. Cold boot resuelto definitivamente.
+
+> Para un snapshot completo y reproducible (hardware + offsets + boot config), ver `docs/GOLD_STATE.md`.
 
 ## Resumen del fix de cold boot (2026-05-02)
 
@@ -60,7 +62,7 @@ display_auto_detect=0
 ```
 
 ### ST7789 parámetros validados
-- MADCTL: `0xA8` | COLMOD: `0x05` | INVOFF
+- MADCTL: `0xA0` | COLMOD: `0x05` | INVOFF
 - col_offset: 18, row_offset: 82
 - Backlight activo-LOW en GPIO23
 - `spi_device=1` → `/dev/spidev0.1`

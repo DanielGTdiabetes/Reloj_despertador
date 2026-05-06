@@ -26,14 +26,30 @@ Este documento describe la configuración exacta y validada que hace funcionar e
 
 ## 2. Configuración del Sistema (Raspberry Pi)
 
-El archivo `/boot/firmware/config.txt` DEBE contener estas líneas:
+El archivo de boot config suele ser `/boot/firmware/config.txt` (o `/boot/config.txt` según distro).
+
+### Mínimo imprescindible
 ```ini
 dtparam=spi=on
 dtoverlay=spi0-2cs
 dtparam=i2c_arm=on
+dtparam=i2s=on
 dtoverlay=max98357a
-dtoverlay=watchdog=on
 ```
+
+### Recomendado (pero no imprescindible para las pantallas)
+```ini
+dtoverlay=watchdog=on
+camera_auto_detect=0
+display_auto_detect=0
+```
+
+### Sudoers (WIFI scan)
+La app escanea redes con `sudo -n /sbin/iwlist wlan0 scan`. En una instalación limpia, configura sudoers para permitir ese comando sin contraseña al usuario del servicio.
+
+### systemd
+- Servicio: `scripts/reloj.service` → `/etc/systemd/system/reloj.service`
+- Preflight: `scripts/preflight_hw.sh` (verifica `/dev/spidev0.0`, `/dev/spidev0.1`, `/dev/gpiomem`)
 
 ## 3. Configuración de la Aplicación (`config/config.json`)
 
