@@ -71,6 +71,35 @@ enable_dtparam "dtparam=i2c_arm=on"
 enable_dtparam "dtparam=i2s=on"
 enable_overlay "dtoverlay=max98357a"
 
+echo "[bootstrap] Generating alarm sounds..."
+python3 - <<'PY'
+import wave, struct, math, os
+
+def generate_alarm(filepath):
+    sample_rate = 44100
+    duration = 4.0
+    num_samples = int(sample_rate * duration)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    with wave.open(filepath, 'w') as f:
+        f.setnchannels(1)
+        f.setsampwidth(2)
+        f.setframerate(sample_rate)
+        for i in range(num_samples):
+            t = i / sample_rate
+            val = (math.sin(2 * math.pi * 440 * t) +
+                   math.sin(2 * math.pi * 554 * t) * 0.5 +
+                   math.sin(2 * math.pi * 659 * t) * 0.3)
+            env = min(t / 1.0, 1.0) * min((duration - t) / 0.5, 1.0)
+            sample = int(val * env * 0.5 * 32767)
+            f.writeframesraw(struct.pack('<h', sample))
+    print(f"[bootstrap] Generated {filepath} ({os.path.getsize(filepath)} bytes)")
+
+base = "/home/dani/reloj_despertador/src/assets"
+generate_alarm(f"{base}/sounds/alarm1.wav")
+generate_alarm(f"{base}/sounds/beep.wav")
+generate_alarm(f"{base}/alarm.wav")
+PY
+
 echo "[bootstrap] Installing systemd service..."
 install -m 0644 "$SERVICE_SRC" "$SERVICE_DST"
 systemctl daemon-reload
