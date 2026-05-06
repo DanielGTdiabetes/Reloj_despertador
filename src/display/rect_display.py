@@ -18,8 +18,8 @@ class RectDisplay:
             dc_pin=self._cfg.get("dc_pin", 22),
             rst_pin=self._cfg.get("rst_pin", 27),
             bl_pin=self._cfg.get("bl_pin", 23),
-            col_offset=self._cfg.get("col_offset", 82),
-            row_offset=self._cfg.get("row_offset", 18),
+            col_offset=self._cfg.get("col_offset", 18),
+            row_offset=self._cfg.get("row_offset", 82),
         )
 
     def set_brightness(self, percent: int) -> None:

@@ -46,8 +46,8 @@ Usar en `/boot/firmware/config.txt` (o `/boot/config.txt` según distro):
 ## Configuración app (extracto)
 `config/config.json`:
 - `displays.rect.spi_device=1` (NO 0)
-- `displays.rect.col_offset=82`
-- `displays.rect.row_offset=18`
+- `displays.rect.col_offset=18`
+- `displays.rect.row_offset=82`
 - `boot.startup_delay_seconds=3`
 - `boot.diag_only_rect=false`
 - `ups.enabled / i2c_bus / i2c_address / poll_interval`
