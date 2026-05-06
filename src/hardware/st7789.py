@@ -116,7 +116,7 @@ class ST7789Display:
 
         self._cd(self.CMD_MADCTL, [self.madctl_val], init_phase=True)
         self._cd(self.CMD_COLMOD, [self.colmod_val], init_phase=True)
-        self._cmd(0x21, init_phase=True) # INVON
+        self._cmd(0x20, init_phase=True) # INVOFF
         self._cmd(self.CMD_NORON, init_phase=True); time.sleep(0.01)
         self._cmd(self.CMD_DISPON, init_phase=True); time.sleep(0.1)
 
