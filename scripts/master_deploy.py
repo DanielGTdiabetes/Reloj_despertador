@@ -1,6 +1,9 @@
 
-import paramiko
+import errno
+import json
 import os
+
+import paramiko
 
 def master_deploy():
     ssh = paramiko.SSHClient()
@@ -23,11 +26,59 @@ def master_deploy():
         else:
             print(f"Skipping missing file: {local}")
 
+    def remote_exists(remote):
+        try:
+            sftp.stat(remote)
+            return True
+        except OSError as exc:
+            if getattr(exc, "errno", None) in (errno.ENOENT, None):
+                return False
+            raise
+
+    def sync_config_safely(local, remote):
+        if not os.path.exists(local):
+            print(f"Skipping missing file: {local}")
+            return
+
+        if not remote_exists(remote):
+            print(f"Seeding missing remote config from {local}...")
+            sftp.put(local, remote)
+            return
+
+        with open(local, encoding="utf-8") as local_file:
+            local_config = json.load(local_file)
+
+        with sftp.open(remote, "r") as remote_file:
+            remote_data = remote_file.read()
+        if isinstance(remote_data, bytes):
+            remote_data = remote_data.decode("utf-8")
+        remote_config = json.loads(remote_data)
+
+        local_ups = local_config.get("ups", {})
+        remote_ups = remote_config.setdefault("ups", {})
+        changed = False
+
+        for key, value in local_ups.items():
+            if key not in remote_ups:
+                remote_ups[key] = value
+                changed = True
+
+        if not changed:
+            print("Remote config already exists; preserving runtime settings.")
+            return
+
+        tmp_remote = f"{remote}.tmp"
+        with sftp.open(tmp_remote, "w") as remote_file:
+            json.dump(remote_config, remote_file, indent=4, ensure_ascii=False)
+            remote_file.write("\n")
+        sftp.rename(tmp_remote, remote)
+        print("Merged missing UPS config defaults without overwriting runtime settings.")
+
     # 2. Cerebro y configuración
     core_files = ["app.py", "main.py", "paths.py", "config_loader.py", "runtime_flags.py"]
     for f in core_files:
         upload_if_exists(os.path.join("src", f), f"/home/dani/reloj_despertador/src/{f}")
-    upload_if_exists("config/config.json", "/home/dani/reloj_despertador/config/config.json")
+    sync_config_safely("config/config.json", "/home/dani/reloj_despertador/config/config.json")
     upload_if_exists("requirements.txt", "/home/dani/reloj_despertador/requirements.txt")
     upload_if_exists("diag_battery.py", "/home/dani/reloj_despertador/diag_battery.py")
 
