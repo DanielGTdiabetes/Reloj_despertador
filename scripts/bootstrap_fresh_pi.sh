@@ -48,11 +48,26 @@ echo "[bootstrap] Configuring boot hardware in $BOOT_CONFIG..."
 touch "$BOOT_CONFIG"
 sed -i 's/^[[:space:]]*dtparam=audio=on/# dtparam=audio=on/' "$BOOT_CONFIG"
 
-grep -q '^dtparam=spi=on' "$BOOT_CONFIG" || echo 'dtparam=spi=on' >> "$BOOT_CONFIG"
-grep -q '^dtoverlay=spi0-2cs' "$BOOT_CONFIG" || echo 'dtoverlay=spi0-2cs' >> "$BOOT_CONFIG"
-grep -q '^dtparam=i2c_arm=on' "$BOOT_CONFIG" || echo 'dtparam=i2c_arm=on' >> "$BOOT_CONFIG"
-grep -q '^dtparam=i2s=on' "$BOOT_CONFIG" || echo 'dtparam=i2s=on' >> "$BOOT_CONFIG"
-grep -q '^dtoverlay=max98357a' "$BOOT_CONFIG" || echo 'dtoverlay=max98357a' >> "$BOOT_CONFIG"
+# Habilitar interfaces (descomentar si existen, añadir si no)
+function enable_dtparam() {
+    local param=$1
+    if grep -q "^#\?${param}" "$BOOT_CONFIG"; then
+        sed -i "s/^#\?${param}/${param}/" "$BOOT_CONFIG"
+    else
+        echo "${param}" >> "$BOOT_CONFIG"
+    fi
+}
+
+function enable_overlay() {
+    local overlay=$1
+    grep -q "^${overlay}" "$BOOT_CONFIG" || echo "${overlay}" >> "$BOOT_CONFIG"
+}
+
+enable_dtparam "dtparam=spi=on"
+enable_overlay "dtoverlay=spi0-2cs"
+enable_dtparam "dtparam=i2c_arm=on"
+enable_dtparam "dtparam=i2s=on"
+enable_overlay "dtoverlay=max98357a"
 
 echo "[bootstrap] Installing systemd service..."
 install -m 0644 "$SERVICE_SRC" "$SERVICE_DST"
