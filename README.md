@@ -10,14 +10,19 @@ La ST7789 usa `spi_device=1` con `no_cs=True` y CS manual por GPIO16.
 Requiere `dtoverlay=spi0-2cs` en config.txt para que exista `/dev/spidev0.1`.
 NO usar `spi0.0` para la ST7789.
 
-## Cambios de robustez aplicados
-- Bus SPI centralizado con lock global y transacciones seguras (`try/finally`, todos los CS en HIGH al salir).
-- Inicialización temprana de CS conocidos y perfiles por dispositivo.
-- ST7789 con init robusta, delays mayores, backlight apagado durante init y reintento automático.
-- `no_cs=True` con fallo explícito: si el kernel no permite desactivar CS hardware, la app aborta con `RuntimeError`.
-- Validación de configuración de pantallas al arranque (dimensiones/pines duplicados/uso I2C reservado).
-- Modo diagnóstico para arrancar solo ST7789 (`boot.diag_only_rect=true`).
-- Servicio systemd con `preflight` de `/dev/spidev*`, `/dev/gpiomem`, e I2C opcional.
+## Estado Actual y Configuración "Gold"
+El sistema está configurado y validado para funcionar con una pantalla redonda GC9A01 y una rectangular ST7789 compartiendo el bus SPI0.
+
+Para ver los detalles exactos de offsets, pines y comandos de inicialización, consulta la [Documentación Gold State](docs/GOLD_STATE.md).
+
+## Instalación Limpia (Snapshot)
+Para dejar el sistema tal cual está ahora en una Raspberry Pi nueva:
+1. Asegúrate de tener acceso SSH a la Pi.
+2. Ejecuta el script de despliegue completo:
+   ```bash
+   python scripts/full_bootstrap_deploy.py
+   ```
+   Este script se encarga de subir los archivos, configurar el hardware (config.txt), instalar dependencias y activar el servicio.
 
 ## Tabla de pines (auditada)
 | GPIO | Función | Dirección | Periférico | Riesgo |

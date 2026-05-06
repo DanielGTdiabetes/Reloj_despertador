@@ -97,9 +97,9 @@ def main() -> int:
         write_cmd(0x11) # SLPOUT
         time.sleep(0.15)
         
-        write_cmd(0x36, [0xA8]) # MADCTL
+        write_cmd(0x36, [0xA0]) # MADCTL (RGB order)
         write_cmd(0x3A, [0x05]) # COLMOD
-        write_cmd(0x21) # INVON
+        write_cmd(0x20) # INVOFF (Normal colors)
         write_cmd(0x13) # NORON
         time.sleep(0.01)
         write_cmd(0x29) # DISPON
