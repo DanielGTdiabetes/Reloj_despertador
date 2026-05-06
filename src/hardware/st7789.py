@@ -30,7 +30,7 @@ class ST7789Display:
 
     def __init__(self, spi_port=0, spi_device=1, cs_pin=16, dc_pin=22, rst_pin=27, bl_pin=23, 
                  col_offset=18, row_offset=82, 
-                 init_extended=False, madctl_val=0xA8, colmod_val=0x05):
+                 init_extended=False, madctl_val=0xA0, colmod_val=0x05):
         self.spi_port = spi_port
         self.spi_device = spi_device
         self.cs_pin = cs_pin
