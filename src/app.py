@@ -140,7 +140,8 @@ class AlarmClockApp:
             bus=ups_cfg.get("i2c_bus", 1),
             address=addr_raw,
             warning_threshold=ups_cfg.get("warning_threshold", 20.0),
-            shutdown_threshold=ups_cfg.get("shutdown_threshold", 2.0),
+            critical_threshold=ups_cfg.get("critical_threshold", 15.0),
+            shutdown_threshold=ups_cfg.get("shutdown_threshold", 12.0),
             on_low_battery=self._on_battery_low,
             on_shutdown_required=self._on_battery_shutdown,
         )
