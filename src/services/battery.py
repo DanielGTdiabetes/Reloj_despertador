@@ -29,8 +29,8 @@ log = logging.getLogger(__name__)
 POLL_INTERVAL      = 30    # segundos entre lecturas en estado normal
 CRITICAL_INTERVAL  =  5    # segundos en estado crítico / shutdown
 WARNING_THRESHOLD  = 20.0  # %  — nivel "warning" (aviso visual + status)
-CRITICAL_THRESHOLD = 10.0  # %  — nivel "critical" (aviso urgente)
-SHUTDOWN_THRESHOLD =  2.0  # %  — nivel "shutdown" (apagado seguro inmediato)
+CRITICAL_THRESHOLD = 15.0  # %  — nivel "critical" (aviso urgente)
+SHUTDOWN_THRESHOLD = 12.0  # %  — nivel "shutdown" (apagado seguro inmediato)
 SHUTDOWN_DELAY     = 10    # segundos de margen antes de ejecutar shutdown
 
 
