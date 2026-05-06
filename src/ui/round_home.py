@@ -244,6 +244,9 @@ class RoundHomeScreen:
         if phase_name:
             _text_center(draw, 200, phase_name, F.small, PURPLE)
 
+        # Indicador de Alarma LATERAL (izquierda)
+        self._draw_sidebar_alarm(img, alarm)
+
         # Indicador de batería (modo noche — esquina derecha)
         self._draw_battery_indicator(img, battery)
 
