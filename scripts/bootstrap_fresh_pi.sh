@@ -16,6 +16,8 @@ cd "$APP_DIR"
 
 echo "[bootstrap] Installing system packages..."
 apt-get update
+# git primero — necesario para clonar/actualizar el repositorio
+apt-get install -y git
 apt-get install -y \
   python3-pip \
   python3-dev \
@@ -32,8 +34,7 @@ apt-get install -y \
   python3-smbus2 \
   python3-venv \
   i2c-tools \
-  alsa-utils \
-  git
+  alsa-utils
 
 echo "[bootstrap] git version: $(git --version)"
 
