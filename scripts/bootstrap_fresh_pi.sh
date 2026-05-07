@@ -16,6 +16,8 @@ cd "$APP_DIR"
 
 echo "[bootstrap] Installing system packages..."
 apt-get update
+# git primero — necesario para clonar/actualizar el repositorio
+apt-get install -y git
 apt-get install -y \
   python3-pip \
   python3-dev \
@@ -32,8 +34,7 @@ apt-get install -y \
   python3-smbus2 \
   python3-venv \
   i2c-tools \
-  alsa-utils \
-  git
+  alsa-utils
 
 echo "[bootstrap] git version: $(git --version)"
 
@@ -118,6 +119,20 @@ PY
 
 echo "[bootstrap] Installing systemd service..."
 install -m 0644 "$SERVICE_SRC" "$SERVICE_DST"
+
+echo "[bootstrap] Installing UPS HAT watchdog service..."
+UPS_SERVICE_SRC="$APP_DIR/scripts/ups-watchdog.service"
+UPS_SERVICE_DST="/etc/systemd/system/ups-watchdog.service"
+if [ -f "$UPS_SERVICE_SRC" ]; then
+    install -m 0644 "$UPS_SERVICE_SRC" "$UPS_SERVICE_DST"
+    # Asegurar que las rutas apuntan a $APP_DIR
+    sed -i "s|/home/pi/Reloj_despertador|$APP_DIR|g" "$UPS_SERVICE_DST"
+    systemctl enable ups-watchdog.service
+    echo "[bootstrap] ups-watchdog.service habilitado"
+else
+    echo "[bootstrap] AVISO: ups-watchdog.service no encontrado, omitiendo"
+fi
+
 systemctl daemon-reload
 systemctl enable reloj.service
 
@@ -150,8 +165,18 @@ if missing:
     raise SystemExit("Missing imports:\n" + "\n".join(missing))
 PY
 
+echo "[bootstrap] Configuring UPS HAT auto power-on..."
+python3 "$APP_DIR/scripts/ups_auto_start.py" && \
+    echo "[bootstrap] UPS auto-arranque configurado OK" || \
+    echo "[bootstrap] AVISO: UPS HAT no detectado (normal si el HAT no está instalado todavía)"
+
 echo "[bootstrap] Starting reloj.service..."
 systemctl restart reloj.service
 systemctl --no-pager -l status reloj.service || true
+
+if systemctl is-enabled ups-watchdog.service &>/dev/null; then
+    systemctl restart ups-watchdog.service
+    echo "[bootstrap] ups-watchdog.service iniciado"
+fi
 
 echo "[bootstrap] Done. Reboot if SPI/I2S was just enabled."

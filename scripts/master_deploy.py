@@ -94,6 +94,16 @@ def master_deploy():
     for f in service_files:
         upload_if_exists(os.path.join("src", "services", f), f"/home/dani/reloj_despertador/src/services/{f}")
 
+    # 3b. Scripts de auto-arranque UPS HAT
+    ups_scripts = [
+        "ups_watchdog.py",
+        "ups_auto_start.py",
+        "ups-watchdog.service",
+        "install_ups_auto_start.sh",
+    ]
+    for f in ups_scripts:
+        upload_if_exists(os.path.join("scripts", f), f"/home/dani/reloj_despertador/scripts/{f}")
+
     # 4. Interfaz
     ui_files = ["round_home.py", "rect_ui.py", "theme.py", "weather_icons.py", "__init__.py"]
     for f in ui_files:
@@ -111,9 +121,27 @@ def master_deploy():
     ssh.exec_command("cp /home/dani/reloj_despertador/src/assets/menu_icons/alarm.png /home/dani/reloj_despertador/src/assets/menu_icons/toggle_alarm.png")
             
     sftp.close()
-    
+
+    def run_sudo(cmd):
+        _, stdout, stderr = ssh.exec_command(f"echo '26021980' | sudo -S sh -c '{cmd}'", timeout=60)
+        out = stdout.read().decode().strip()
+        err = stderr.read().decode().strip()
+        rc  = stdout.channel.recv_exit_status()
+        return rc, out, err
+
+    # Instalar y arrancar ups-watchdog.service
+    print("Installing ups-watchdog service...")
+    rc, out, err = run_sudo(
+        "chmod +x /home/dani/reloj_despertador/scripts/install_ups_auto_start.sh && "
+        "bash /home/dani/reloj_despertador/scripts/install_ups_auto_start.sh"
+    )
+    if out:
+        print(out)
+    if rc != 0:
+        print(f"  AVISO: instalador terminó con rc={rc}. {err}")
+
     print("Restarting service...")
-    ssh.exec_command("echo '26021980' | sudo -S systemctl restart reloj.service")
+    run_sudo("systemctl restart reloj.service")
     ssh.close()
     print("MASTER DEPLOY COMPLETED!")
 
