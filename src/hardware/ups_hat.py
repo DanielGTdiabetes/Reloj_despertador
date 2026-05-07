@@ -2,7 +2,7 @@
 ups_hat.py — Driver I2C para DFR0528 UPS HAT (Pi Zero W)
 
 Dirección I2C por defecto: 0x10
-Mapa de registros:
+Mapa de registros (DFR0528):
   0x01  PID      — Product ID (debe ser 0xDF para confirmar presencia)
   0x02  VERSION  — Firmware (0x10 = V1.0, 0x11 = V1.1, …)
   0x03  VCELL_H  — Voltaje bits 11:8
@@ -10,9 +10,20 @@ Mapa de registros:
   0x05  SOC_H    — State-of-Charge byte alto
   0x06  SOC_L    — State-of-Charge byte bajo (1 LSB = 0.003906 %)
 
+Registros de control de energía (compatibles con dfups.c de DFRobot):
+  0x09  FUNCTION — Flags de función (bits: 4=watchdog, 3=LED, 2=RGB, 1=shutdown, 0=powam)
+  0x0D  TIMER_H  — Timer auto-arranque, byte alto (minutos)
+  0x0E  TIMER_L  — Timer auto-arranque, byte bajo (minutos)
+  0x0F  WATCHDOG — Latido del watchdog (escribir 0x14 cada ≤10s para mantener encendido)
+
 Fórmulas:
   voltage_mv = ((VCELL_H << 8) | VCELL_L) * 1.25
   soc_pct    = ((SOC_H  << 8) | SOC_L)   * 0.003906   →  clamped [0, 100]
+  timer_min  = (TIMER_H << 8) | TIMER_L
+
+Auto-arranque tras corte de luz:
+  Llamar set_auto_restart(minutes=1) antes de apagar. El MCU del HAT reiniciará
+  la Pi automáticamente cuando la batería o la corriente externa se recupere.
 
 Uso mínimo:
   hat = UPSHat()
@@ -31,6 +42,15 @@ REG_VCELL_H  = 0x03
 REG_VCELL_L  = 0x04
 REG_SOC_H    = 0x05
 REG_SOC_L    = 0x06
+
+# Registros de control de energía (del protocolo dfups.c de DFRobot)
+REG_FUNCTION = 0x09   # flags: bit1=shutdown, bit4=watchdog
+REG_TIMER_H  = 0x0D   # minutos para auto-arranque, byte alto
+REG_TIMER_L  = 0x0E   # minutos para auto-arranque, byte bajo
+REG_WATCHDOG = 0x0F   # latido: escribir 0x14 cada ≤10s
+
+WATCHDOG_BEAT    = 0x14
+FLAG_SHUTDOWN    = 0x02   # bit 1 del registro FUNCTION
 
 EXPECTED_PID  = 0xDF
 DEFAULT_ADDR  = 0x10
@@ -134,3 +154,44 @@ class UPSHat:
             "soc":        self.read_soc(),
             "version":    self.read_version(),
         }
+
+    # ── Control de energía ───────────────────────────────────────────────────
+
+    def set_auto_restart(self, minutes: int = 1) -> None:
+        """Configura el MCU del HAT para reiniciar la Pi automáticamente.
+
+        El HAT arrancará la Pi transcurridos `minutes` minutos tras detectar
+        que el sistema se ha apagado (latido del watchdog ausente). Esto también
+        persiste en la memoria no volátil del MCU, por lo que funciona incluso
+        tras un corte de batería completo cuando vuelve la corriente externa.
+
+        Args:
+            minutes: Minutos de espera antes del arranque automático (mínimo 1).
+        """
+        if minutes < 1:
+            minutes = 1
+        minutes = min(minutes, 0x7FFF)
+        hi = (minutes >> 8) & 0xFF
+        lo = minutes & 0xFF
+        self._bus.write_byte_data(self._address, REG_TIMER_H, hi)
+        self._bus.write_byte_data(self._address, REG_TIMER_L, lo)
+
+    def read_auto_restart(self) -> int:
+        """Lee el timer de auto-arranque configurado actualmente (en minutos)."""
+        hi = self._bus.read_byte_data(self._address, REG_TIMER_H)
+        lo = self._bus.read_byte_data(self._address, REG_TIMER_L)
+        return (hi << 8) | lo
+
+    def send_watchdog(self) -> None:
+        """Envía un latido al MCU del HAT para mantenerlo activo.
+
+        Debe llamarse cada ≤10 segundos mientras el sistema está encendido.
+        Si el latido se detiene, el MCU lo interpreta como que el sistema se
+        apagó y pone en marcha el timer de auto-arranque.
+        """
+        self._bus.write_byte_data(self._address, REG_WATCHDOG, WATCHDOG_BEAT)
+
+    def signal_shutdown(self) -> None:
+        """Notifica al MCU que el sistema va a apagarse intencionalmente."""
+        flag = self._bus.read_byte_data(self._address, REG_FUNCTION)
+        self._bus.write_byte_data(self._address, REG_FUNCTION, flag | FLAG_SHUTDOWN)

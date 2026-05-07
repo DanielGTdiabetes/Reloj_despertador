@@ -1,0 +1,19 @@
+[Unit]
+Description=DFR0528 UPS HAT Watchdog (auto power-on after power loss)
+After=network.target
+# Arranca antes del servicio principal del reloj para que el latido
+# comience desde el principio y el auto-arranque esté ya configurado.
+Before=reloj.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/pi/Reloj_despertador
+ExecStart=/usr/bin/python3 /home/pi/Reloj_despertador/scripts/ups_watchdog.py
+# TimeoutStopSec amplio para que el script pueda señalizar shutdown al MCU
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
