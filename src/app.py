@@ -30,7 +30,8 @@ from runtime_flags import RuntimeFlags
 _SHIFT_POSITIONS = [(0,0),(1,0),(2,0),(2,1),(2,2),(1,2),(0,2),(0,1)]
 SHIFT_INTERVAL   = 180   # segundos entre cada paso de shift
 DIM_TIMEOUT      = 180   # segundos de inactividad antes de bajar brillo
-DIM_BRIGHTNESS   = 15    # % de brillo en modo dim
+DIM_BRIGHTNESS      = 15    # % de brillo en modo dim (redonda, hardware PWM)
+DIM_BRIGHTNESS_RECT = 45    # % de brillo en modo dim para la rect (software, backlight siempre encendido)
 
 
 class State:
@@ -105,6 +106,10 @@ class AlarmClockApp:
         # Pixel shift anti burn-in
         self._shift_idx  = 0
         self._last_shift = time.time()
+
+        # WiFi status (caché para no llamar subprocess cada frame)
+        self._connected_ssid   = ""
+        self._wifi_check_time  = 0.0
 
         # Auto-dim por inactividad
         self._last_interaction = time.time()
@@ -608,6 +613,21 @@ class AlarmClockApp:
         arr = (arr * factor).clip(0, 255).astype(np.uint8)
         return Image.fromarray(arr)
 
+    def _get_connected_ssid(self) -> str:
+        """Devuelve el SSID al que está conectado wlan0. Refresca cada 30 s."""
+        now = time.time()
+        if now - self._wifi_check_time >= 30:
+            self._wifi_check_time = now
+            try:
+                result = subprocess.check_output(
+                    ["iwgetid", "-r"], text=True, timeout=2,
+                    stderr=subprocess.DEVNULL,
+                )
+                self._connected_ssid = result.strip()
+            except Exception:
+                self._connected_ssid = ""
+        return self._connected_ssid
+
     def _render(self):
         now = self.clock.now()
         if self.state == State.ALARM_RINGING:
@@ -617,8 +637,9 @@ class AlarmClockApp:
         elif self.state != State.ALARM:
             self._check_alarm(now)
 
-        round_img = self._render_round(now)
-        rect_img = self._render_rect(now)
+        wifi_ssid = self._get_connected_ssid()
+        round_img = self._render_round(now, wifi_ssid=wifi_ssid)
+        rect_img = self._render_rect(now, wifi_ssid=wifi_ssid)
 
         if self.displays:
             dx, dy = _SHIFT_POSITIONS[self._shift_idx]
@@ -630,9 +651,13 @@ class AlarmClockApp:
                     round_img = self._software_dim(round_img, dim_factor)
             if rect_img is not None:
                 rect_img = self._pixel_shift(rect_img, dx, dy)
+                rect_dim = DIM_BRIGHTNESS_RECT / 100.0 if self._dimmed else 1.0
+                rect_factor = (self.brightness_rect / 100.0) * rect_dim
+                if rect_factor < 1.0:
+                    rect_img = self._software_dim(rect_img, rect_factor)
             self.displays.submit(round_image=round_img, rect_image=rect_img)
 
-    def _render_round(self, now):
+    def _render_round(self, now, wifi_ssid=""):
         # Estado de batería para el render (None si HAT no disponible)
         batt = self.battery.get_state() if self.battery else None
 
@@ -649,7 +674,7 @@ class AlarmClockApp:
             # ── Pantalla de noche con luna por fases ─────────────────────────
             if sun_info["period"] == "night":
                 return self.ui_round.render_night(
-                    now, moon, self.alarm, sun_info, battery=batt
+                    now, moon, self.alarm, sun_info, battery=batt, wifi_ssid=wifi_ssid
                 )
             # ─────────────────────────────────────────────────────────────────
 
@@ -662,7 +687,7 @@ class AlarmClockApp:
                 current.setdefault("temp_min", today.get("temp_min"))
 
             return self.ui_round.render(now, current, sun_info, moon,
-                                        self.alarm, self.status, battery=batt)
+                                        self.alarm, self.status, battery=batt, wifi_ssid=wifi_ssid)
 
         if self.state == State.MENU:
             key, label = MENU_ITEMS[self.menu_index]
@@ -710,7 +735,7 @@ class AlarmClockApp:
 
         return None
 
-    def _render_rect(self, now):
+    def _render_rect(self, now, wifi_ssid=""):
         if self.state == State.CLOCK:
             period = self.sun.get_time_of_day()
             return self.ui_rect.render_forecast(self._forecast_for_ui(), period=period)
@@ -727,7 +752,7 @@ class AlarmClockApp:
         if self.state == State.BRIGHTNESS:
             return self.ui_rect.render_brightness(self.brightness_round, self.brightness_rect, self.brightness_target, self.brightness_editing)
         if self.state == State.WIFI_SCAN:
-            return self.ui_rect.render_wifi_scan(self.wifi_networks, self.wifi_index, self.wifi_scanning)
+            return self.ui_rect.render_wifi_scan(self.wifi_networks, self.wifi_index, self.wifi_scanning, connected_ssid=wifi_ssid)
         if self.state == State.WIFI_PASSWORD:
             return self.ui_rect.render_wifi_keyboard(
                 self.wifi_ssid,
@@ -821,7 +846,9 @@ class AlarmClockApp:
             if not self._dimmed and self.state not in (State.STANDBY, State.ALARM_RINGING):
                 if now - self._last_interaction >= DIM_TIMEOUT and self.displays:
                     self._dimmed = True
-                    self.displays.set_brightness(round_percent=DIM_BRIGHTNESS, rect_percent=DIM_BRIGHTNESS)
+                    # Round: bajar a DIM_BRIGHTNESS% via hardware PWM
+                    # Rect: mantener BL encendido — el dimming de píxeles ya oscurece el contenido
+                    self.displays.set_brightness(round_percent=DIM_BRIGHTNESS, rect_percent=self.brightness_rect)
 
             if now - last_weather_check >= 15.0:
                 if not self.flags.disable_weather and self.weather.should_update():

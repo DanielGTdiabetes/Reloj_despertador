@@ -51,6 +51,7 @@ REG_WATCHDOG = 0x0F   # latido: escribir 0x14 cada ≤10s
 
 WATCHDOG_BEAT    = 0x14
 FLAG_SHUTDOWN    = 0x02   # bit 1 del registro FUNCTION
+FLAG_POWAM       = 0x01   # bit 0: alimentación externa presente (power from mains)
 
 EXPECTED_PID  = 0xDF
 DEFAULT_ADDR  = 0x10
@@ -190,6 +191,17 @@ class UPSHat:
         apagó y pone en marcha el timer de auto-arranque.
         """
         self._bus.write_byte_data(self._address, REG_WATCHDOG, WATCHDOG_BEAT)
+
+    def read_function(self) -> int:
+        """Lee el registro FUNCTION (0x09) — bits: 4=watchdog, 3=LED, 2=RGB, 1=shutdown, 0=powam."""
+        return self._bus.read_byte_data(self._address, REG_FUNCTION)
+
+    def is_on_mains(self) -> bool:
+        """True si hay alimentación externa (corriente de red), False si solo batería.
+        POWAM=1 indica modo batería activo (sin corriente externa), de ahí la negación.
+        NOTA: este bit no es fiable en todos los firmware del DFR0528.
+        Se recomienda usar detección por tendencia de voltaje en battery.py."""
+        return not bool(self.read_function() & FLAG_POWAM)
 
     def signal_shutdown(self) -> None:
         """Notifica al MCU que el sistema va a apagarse intencionalmente."""
