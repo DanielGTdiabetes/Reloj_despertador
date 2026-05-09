@@ -368,10 +368,17 @@ class AlarmClockApp:
     def _standby_enter(self) -> None:
         print("[Standby] entrando", flush=True)
         self.state = State.STANDBY
-        self.displays.set_brightness(round_percent=0, rect_percent=0)
+        # Frame negro para la redonda (sin BL pin, software es la única opción)
+        if self.displays:
+            black_round = Image.new("RGB", (240, 240), (0, 0, 0))
+            black_rect  = Image.new("RGB", (284, 76),  (0, 0, 0))
+            self.displays.submit(round_image=black_round, rect_image=black_rect)
+            self.displays.set_brightness(round_percent=0, rect_percent=0)
 
     def _standby_exit(self) -> None:
         print("[Standby] saliendo", flush=True)
+        self._dimmed = False
+        self._last_interaction = time.time()
         self.state = State.CLOCK
         self.displays.set_brightness(round_percent=self.brightness_round, rect_percent=self.brightness_rect)
 
@@ -598,6 +605,13 @@ class AlarmClockApp:
         out.paste(img, (dx, dy))
         return out
 
+    def _software_dim(self, img: Image.Image, factor: float) -> Image.Image:
+        """Oscurece la imagen multiplicando RGB por factor (0.0–1.0)."""
+        import numpy as np
+        arr = np.asarray(img, dtype=np.float32)
+        arr = (arr * factor).clip(0, 255).astype(np.uint8)
+        return Image.fromarray(arr)
+
     def _render(self):
         now = self.clock.now()
         if self.state == State.ALARM_RINGING:
@@ -612,8 +626,12 @@ class AlarmClockApp:
 
         if self.displays:
             dx, dy = _SHIFT_POSITIONS[self._shift_idx]
+            dim_factor = DIM_BRIGHTNESS / 100.0 if self._dimmed else 1.0
+
             if round_img is not None:
                 round_img = self._pixel_shift(round_img, dx, dy)
+                if dim_factor < 1.0:
+                    round_img = self._software_dim(round_img, dim_factor)
             if rect_img is not None:
                 rect_img = self._pixel_shift(rect_img, dx, dy)
             self.displays.submit(round_image=round_img, rect_image=rect_img)
