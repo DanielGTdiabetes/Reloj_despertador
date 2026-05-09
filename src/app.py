@@ -109,6 +109,7 @@ class AlarmClockApp:
         # Auto-dim por inactividad
         self._last_interaction = time.time()
         self._dimmed = False
+        self._standby_needs_black = False
 
         self.weather_updating = False
         postal = self.config.get("location", {}).get("postal_code", "00000")
@@ -368,12 +369,7 @@ class AlarmClockApp:
     def _standby_enter(self) -> None:
         print("[Standby] entrando", flush=True)
         self.state = State.STANDBY
-        # Frame negro para la redonda (sin BL pin, software es la única opción)
-        if self.displays:
-            black_round = Image.new("RGB", (240, 240), (0, 0, 0))
-            black_rect  = Image.new("RGB", (284, 76),  (0, 0, 0))
-            self.displays.submit(round_image=black_round, rect_image=black_rect)
-            self.displays.set_brightness(round_percent=0, rect_percent=0)
+        self._standby_needs_black = True  # el loop lo enviará en el siguiente tick
 
     def _standby_exit(self) -> None:
         print("[Standby] saliendo", flush=True)
@@ -807,6 +803,14 @@ class AlarmClockApp:
                 self._render()
                 self.tick += 1
                 last_render = now
+
+            # Standby: mandar frame negro después de que el render se ha parado
+            if self._standby_needs_black and self.displays:
+                self._standby_needs_black = False
+                black_round = Image.new("RGB", (240, 240), (0, 0, 0))
+                black_rect  = Image.new("RGB", (284, 76),  (0, 0, 0))
+                self.displays.submit(round_image=black_round, rect_image=black_rect)
+                self.displays.set_brightness(round_percent=0, rect_percent=0)
 
             # Pixel shift: avanzar posición cada SHIFT_INTERVAL segundos
             if now - self._last_shift >= SHIFT_INTERVAL:
