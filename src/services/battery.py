@@ -104,9 +104,9 @@ class BatteryService:
             hat.open()
             ver = hat.read_version()
             self._hat = hat
-            log.info("[Battery] UPS HAT OK — firmware %s", ver)
+            print(f"[Battery] UPS HAT OK — firmware {ver}", flush=True)
         except Exception as exc:
-            log.warning("[Battery] HAT no disponible: %s", exc)
+            print(f"[Battery] HAT no disponible: {exc}", flush=True)
             return False
 
         self._running = True
@@ -182,11 +182,11 @@ class BatteryService:
                     self._volts = volts
                     self._level = level
 
-                log.debug("[Battery] SOC=%.1f%%  V=%.0fmV  level=%s", soc, volts, level)
+                print(f"[Battery] SOC={soc:.1f}%  V={volts:.0f}mV  level={level}", flush=True)
                 self._handle_level(level, soc)
 
             except Exception as exc:
-                log.warning("[Battery] error de lectura I2C: %s", exc)
+                print(f"[Battery] error de lectura I2C: {exc}", flush=True)
 
             # Reducir intervalo cuando la batería está baja
             interval = (
@@ -194,7 +194,16 @@ class BatteryService:
                 if self._level in ("critical", "shutdown")
                 else POLL_INTERVAL
             )
-            time.sleep(interval)
+
+            # Enviar latido al watchdog del HAT cada ciclo para que sepa que la Pi está viva
+            elapsed = 0.0
+            while self._running and elapsed < interval:
+                try:
+                    self._hat.send_watchdog()
+                except Exception:
+                    pass
+                time.sleep(5.0)
+                elapsed += 5.0
 
     def _classify(self, soc: float) -> str:
         if soc <= self._shut_thr:

@@ -15,6 +15,7 @@ class RotaryEncoder:
             "rotate_ccw": [],
             "button_press": [],
             "button_long_press": [],
+            "button_power_press": [],   # ≥ 5s → apagado
         }
         
         GPIO.setup(self.clk_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
@@ -48,6 +49,7 @@ class RotaryEncoder:
         last_sw = GPIO.input(self.sw_pin)
         pressed_at = None
         long_fired = False
+        power_fired = False
         
         # Tabla de verdad corregida e invertida
         TRANSITIONS = [
@@ -86,15 +88,20 @@ class RotaryEncoder:
                 if sw == GPIO.LOW:
                     pressed_at = now
                     long_fired = False
+                    power_fired = False
                 else:
-                    if pressed_at is not None and not long_fired:
+                    if pressed_at is not None and not long_fired and not power_fired:
                         self._emit("button_press")
                     pressed_at = None
-            
-            if pressed_at is not None and not long_fired:
-                if now - pressed_at >= 1.1:
+
+            if pressed_at is not None:
+                held = now - pressed_at
+                if not long_fired and held >= 1.1:
                     long_fired = True
                     self._emit("button_long_press")
+                if not power_fired and held >= 5.0:
+                    power_fired = True
+                    self._emit("button_power_press")
             
             last_sw = sw
             time.sleep(0.001)

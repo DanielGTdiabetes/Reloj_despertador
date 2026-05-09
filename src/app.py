@@ -175,6 +175,7 @@ class AlarmClockApp:
                 self.encoder.on("rotate_ccw", self._on_ccw)
                 self.encoder.on("button_press", self._on_press)
                 self.encoder.on("button_long_press", self._on_long_press)
+                self.encoder.on("button_power_press", self._on_power_press)
                 print("[HW] encoder OK")
             except Exception as exc:
                 print(f"[HW] encoder failed: {exc}")
@@ -283,6 +284,9 @@ class AlarmClockApp:
     def _on_long_press(self):
         self._emit_event("encoder_long_press")
 
+    def _on_power_press(self):
+        self._emit_event("encoder_power_press")
+
     def _handle_press(self) -> None:
         if self.state == State.CLOCK:
             self.state = State.MENU
@@ -336,6 +340,20 @@ class AlarmClockApp:
             self._snooze_alarm()
         else:
             self.state = State.CLOCK
+
+    def _handle_power_press(self) -> None:
+        """Apagado limpio: avisa al HAT y ejecuta shutdown -h now."""
+        print("[Power] apagado por encoder (5s)", flush=True)
+        self.status = "APAGANDO..."
+        if self.battery is not None:
+            try:
+                self.battery._prepare_auto_restart()
+            except Exception:
+                pass
+        threading.Thread(
+            target=lambda: (time.sleep(2), subprocess.run(["sudo", "shutdown", "-h", "now"])),
+            daemon=True,
+        ).start()
 
     def _select_menu(self):
         key = MENU_ITEMS[self.menu_index][0]
@@ -706,6 +724,8 @@ class AlarmClockApp:
                 self._handle_press()
             elif kind == "encoder_long_press":
                 self._handle_long_press()
+            elif kind == "encoder_power_press":
+                self._handle_power_press()
 
     def run(self):
         print("[Main] starting")
