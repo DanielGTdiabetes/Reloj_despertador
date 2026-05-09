@@ -118,6 +118,31 @@ class RoundHomeScreen:
             else:
                 draw.ellipse([x - r, y - r, x + r, y + r], fill=color)
 
+    def _draw_wifi_indicator(self, draw, connected: bool) -> None:
+        """Icono WiFi — posición simétrica al icono de alarma (lado derecho).
+        Posición: X=177, Y=145 (igual que el indicador de batería).
+        Conectado: 3 arcos + punto en cyan.
+        Sin WiFi: icono atenuado + X roja encima.
+        """
+        col = CYAN if connected else (45, 50, 65)
+        bx, by = 177, 145
+        cx, cy = bx, by + 7
+
+        # Punto central (base del símbolo WiFi)
+        r_dot = 2
+        draw.ellipse([cx - r_dot, cy - r_dot, cx + r_dot, cy + r_dot], fill=col)
+
+        # 3 arcos concéntricos abriendo hacia arriba (225°→315° en coordenadas PIL)
+        for radius in [5, 8, 11]:
+            box = [cx - radius, cy - radius, cx + radius, cy + radius]
+            draw.arc(box, start=225, end=315, fill=col, width=2)
+
+        # X roja encima del icono cuando no hay conexión
+        if not connected:
+            xc, yc, xs = cx + 7, cy - 9, 4  # esquina superior derecha, tamaño 4px
+            draw.line([xc - xs, yc - xs, xc + xs, yc + xs], fill=(220, 50, 50), width=2)
+            draw.line([xc + xs, yc - xs, xc - xs, yc + xs], fill=(220, 50, 50), width=2)
+
     def _draw_battery_indicator(self, img, battery_state) -> None:
         """Indicador de batería — lado derecho, simétrico al icono de alarma.
 
@@ -173,7 +198,7 @@ class RoundHomeScreen:
         tw = bb[2] - bb[0]
         draw.text((bx - tw // 2, y1 + 3), pct_str, font=F.small, fill=col)
 
-    def render(self, now, weather, sun_info, moon, alarm, status, battery=None) -> Image.Image:
+    def render(self, now, weather, sun_info, moon, alarm, status, battery=None, wifi_ssid="") -> Image.Image:
         period = sun_info.get("period", "day")
         th = self._period_theme(period)
 
@@ -213,8 +238,13 @@ class RoundHomeScreen:
         # Indicador de Alarma LATERAL (izquierda)
         self._draw_sidebar_alarm(img, alarm)
 
-        # Indicador de Batería LATERAL (derecha, simétrico a la alarma)
-        self._draw_battery_indicator(img, battery)
+        # Indicador lateral derecho: batería si nivel bajo (warning/critical/shutdown),
+        # WiFi en cualquier otro caso (ok, desconocido, o HAT no presente).
+        batt_level = battery.get("level", "ok") if battery else "ok"
+        if batt_level in ("warning", "critical", "shutdown"):
+            self._draw_battery_indicator(img, battery)
+        else:
+            self._draw_wifi_indicator(draw, connected=bool(wifi_ssid))
 
         # Desc y Temp
         _text_center(draw, 178, desc[:22], F.small, DIM_WHITE)
@@ -223,7 +253,7 @@ class RoundHomeScreen:
 
         return img
 
-    def render_night(self, now, moon, alarm, sun_info=None, battery=None) -> Image.Image:
+    def render_night(self, now, moon, alarm, sun_info=None, battery=None, wifi_ssid="") -> Image.Image:
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
 
@@ -247,8 +277,14 @@ class RoundHomeScreen:
         # Indicador de Alarma LATERAL (izquierda)
         self._draw_sidebar_alarm(img, alarm)
 
-        # Indicador de batería (modo noche — esquina derecha)
-        self._draw_battery_indicator(img, battery)
+        # Indicador lateral derecho: batería si nivel bajo (warning/critical/shutdown),
+        # WiFi en cualquier otro caso.
+        draw_night = ImageDraw.Draw(img)
+        batt_level = battery.get("level", "ok") if battery else "ok"
+        if batt_level in ("warning", "critical", "shutdown"):
+            self._draw_battery_indicator(img, battery)
+        else:
+            self._draw_wifi_indicator(draw_night, connected=bool(wifi_ssid))
 
         return img
 

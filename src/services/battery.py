@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 
 # ── Constantes de comportamiento ─────────────────────────────────────────────
 
-POLL_INTERVAL      = 30    # segundos entre lecturas en estado normal
+POLL_INTERVAL      = 10    # segundos entre lecturas en estado normal
 CRITICAL_INTERVAL  =  5    # segundos en estado crítico / shutdown
 WARNING_THRESHOLD  = 20.0  # %  — nivel "warning" (aviso visual + status)
 CRITICAL_THRESHOLD = 15.0  # %  — nivel "critical" (aviso urgente)

@@ -214,7 +214,7 @@ class RectUIScreen:
 
         return img
 
-    def render_wifi_scan(self, nets, index, scanning) -> Image.Image:
+    def render_wifi_scan(self, nets, index, scanning, connected_ssid="") -> Image.Image:
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
         if scanning:
@@ -226,25 +226,34 @@ class RectUIScreen:
         # Mostrar hasta 3 redes: la seleccionada en el centro
         for slot, offset in enumerate([-1, 0, 1]):
             i = index + offset
-            # No mostrar vecinos si se saldría del rango real
             if i < 0 or i >= len(nets):
                 continue
             net = nets[i]
             is_sel = (offset == 0)
+            is_connected = connected_ssid and net["ssid"] == connected_ssid
             ry = 6 + slot * 22
             if is_sel:
+                # Borde verde si es la red actualmente conectada, cyan si solo seleccionada
+                outline_col = (0, 200, 80) if is_connected else CYAN
                 draw.rounded_rectangle([8, ry, W-8, ry+20], radius=5,
-                                       fill=DARK_CARD, outline=CYAN, width=2)
-                draw.text((18, ry+4), net["ssid"][:26], font=F.menu_label, fill=WHITE)
+                                       fill=DARK_CARD, outline=outline_col, width=2)
+                # Checkmark + SSID si está conectada
+                ssid_x = 18
+                if is_connected:
+                    draw.text((18, ry+4), "✓", font=F.menu_label, fill=(0, 200, 80))
+                    ssid_x = 30
+                draw.text((ssid_x, ry+4), net["ssid"][:24], font=F.menu_label, fill=WHITE)
                 bars = net.get("signal", 0)
                 for b in range(4):
                     bx = W - 30 + b * 6
                     bh = 4 + b * 3
-                    col = CYAN if b < bars else (30, 40, 55)
+                    col = (0, 200, 80) if (is_connected and b < bars) else (CYAN if b < bars else (30, 40, 55))
                     draw.rectangle([bx, ry+18-bh, bx+4, ry+18], fill=col)
             else:
-                col = (55, 65, 80)
-                draw.text((18, ry+4), net["ssid"][:26], font=F.small, fill=col)
+                # Red no seleccionada: verde si conectada, gris si no
+                text_col = (0, 160, 60) if is_connected else (55, 65, 80)
+                prefix = "✓ " if is_connected else ""
+                draw.text((18, ry+4), (prefix + net["ssid"])[:28], font=F.small, fill=text_col)
         return img
 
     def render_wifi_keyboard(self, ssid, password, chars, char_idx) -> Image.Image:
