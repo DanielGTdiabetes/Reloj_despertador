@@ -7,6 +7,8 @@ import threading
 import time
 import traceback
 
+from PIL import Image
+
 import RPi.GPIO as GPIO
 
 from config_loader import load_config, save_config
@@ -22,6 +24,13 @@ from services.weather import WeatherService
 from ui.rect_ui import RectUIScreen
 from ui.round_home import RoundHomeScreen
 from runtime_flags import RuntimeFlags
+
+
+# Posiciones de pixel shift: recorre un cuadrado de 2px (invisible al ojo)
+_SHIFT_POSITIONS = [(0,0),(1,0),(2,0),(2,1),(2,2),(1,2),(0,2),(0,1)]
+SHIFT_INTERVAL   = 180   # segundos entre cada paso de shift
+DIM_TIMEOUT      = 180   # segundos de inactividad antes de bajar brillo
+DIM_BRIGHTNESS   = 15    # % de brillo en modo dim
 
 
 class State:
@@ -92,6 +101,14 @@ class AlarmClockApp:
         self.wifi_ssid = ""
         self.wifi_password = ""
         self.wifi_char_idx = 0
+
+        # Pixel shift anti burn-in
+        self._shift_idx  = 0
+        self._last_shift = time.time()
+
+        # Auto-dim por inactividad
+        self._last_interaction = time.time()
+        self._dimmed = False
 
         self.weather_updating = False
         postal = self.config.get("location", {}).get("postal_code", "00000")
@@ -573,6 +590,14 @@ class AlarmClockApp:
         self.state = State.CLOCK
         self.status = "Pospuesta"
 
+    def _pixel_shift(self, img: Image.Image, dx: int, dy: int) -> Image.Image:
+        if dx == 0 and dy == 0:
+            return img
+        w, h = img.size
+        out = Image.new("RGB", (w, h), (0, 0, 0))
+        out.paste(img, (dx, dy))
+        return out
+
     def _render(self):
         now = self.clock.now()
         if self.state == State.ALARM_RINGING:
@@ -586,6 +611,11 @@ class AlarmClockApp:
         rect_img = self._render_rect(now)
 
         if self.displays:
+            dx, dy = _SHIFT_POSITIONS[self._shift_idx]
+            if round_img is not None:
+                round_img = self._pixel_shift(round_img, dx, dy)
+            if rect_img is not None:
+                rect_img = self._pixel_shift(rect_img, dx, dy)
             self.displays.submit(round_image=round_img, rect_image=rect_img)
 
     def _render_round(self, now):
@@ -717,6 +747,16 @@ class AlarmClockApp:
             except queue.Empty:
                 return
 
+            # Registrar interacción para auto-dim
+            if kind in ("encoder_rotate", "encoder_press", "encoder_long_press", "encoder_power_press"):
+                self._last_interaction = time.time()
+                if self._dimmed and self.state != State.STANDBY:
+                    self._dimmed = False
+                    self.displays.set_brightness(
+                        round_percent=self.brightness_round,
+                        rect_percent=self.brightness_rect,
+                    )
+
             # Cualquier interacción saca del standby
             if self.state == State.STANDBY:
                 if kind in ("encoder_rotate", "encoder_press", "encoder_long_press"):
@@ -749,6 +789,18 @@ class AlarmClockApp:
                 self._render()
                 self.tick += 1
                 last_render = now
+
+            # Pixel shift: avanzar posición cada SHIFT_INTERVAL segundos
+            if now - self._last_shift >= SHIFT_INTERVAL:
+                self._shift_idx = (self._shift_idx + 1) % len(_SHIFT_POSITIONS)
+                self._last_shift = now
+
+            # Auto-dim: bajar brillo tras inactividad
+            if not self._dimmed and self.state not in (State.STANDBY, State.ALARM_RINGING):
+                if now - self._last_interaction >= DIM_TIMEOUT and self.displays:
+                    self._dimmed = True
+                    self.displays.set_brightness(round_percent=DIM_BRIGHTNESS, rect_percent=DIM_BRIGHTNESS)
+
             if now - last_weather_check >= 15.0:
                 if not self.flags.disable_weather and self.weather.should_update():
                     threading.Thread(target=self._refresh_weather, daemon=True).start()
