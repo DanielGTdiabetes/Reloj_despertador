@@ -630,6 +630,9 @@ class AlarmClockApp:
                     round_img = self._software_dim(round_img, dim_factor)
             if rect_img is not None:
                 rect_img = self._pixel_shift(rect_img, dx, dy)
+                rect_factor = (self.brightness_rect / 100.0) * dim_factor
+                if rect_factor < 1.0:
+                    rect_img = self._software_dim(rect_img, rect_factor)
             self.displays.submit(round_image=round_img, rect_image=rect_img)
 
     def _render_round(self, now):
