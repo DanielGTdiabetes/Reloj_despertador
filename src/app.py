@@ -33,6 +33,7 @@ class State:
     WIFI_PASSWORD = "wifi_password"
     ALARM_RINGING = "alarm_ringing"
     LOCATION = "location"
+    STANDBY = "standby"
 
 
 MENU_ITEMS = [
@@ -342,18 +343,20 @@ class AlarmClockApp:
             self.state = State.CLOCK
 
     def _handle_power_press(self) -> None:
-        """Apagado limpio: avisa al HAT y ejecuta shutdown -h now."""
-        print("[Power] apagado por encoder (5s)", flush=True)
-        self.status = "APAGANDO..."
-        if self.battery is not None:
-            try:
-                self.battery._prepare_auto_restart()
-            except Exception:
-                pass
-        threading.Thread(
-            target=lambda: (time.sleep(2), subprocess.run(["sudo", "shutdown", "-h", "now"])),
-            daemon=True,
-        ).start()
+        if self.state == State.STANDBY:
+            self._standby_exit()
+        else:
+            self._standby_enter()
+
+    def _standby_enter(self) -> None:
+        print("[Standby] entrando", flush=True)
+        self.state = State.STANDBY
+        self.displays.set_brightness(round_percent=0, rect_percent=0)
+
+    def _standby_exit(self) -> None:
+        print("[Standby] saliendo", flush=True)
+        self.state = State.CLOCK
+        self.displays.set_brightness(round_percent=self.brightness_round, rect_percent=self.brightness_rect)
 
     def _select_menu(self):
         key = MENU_ITEMS[self.menu_index][0]
@@ -714,6 +717,14 @@ class AlarmClockApp:
             except queue.Empty:
                 return
 
+            # Cualquier interacción saca del standby
+            if self.state == State.STANDBY:
+                if kind in ("encoder_rotate", "encoder_press", "encoder_long_press"):
+                    self._standby_exit()
+                elif kind == "encoder_power_press":
+                    self._handle_power_press()
+                continue
+
             if kind == "encoder_rotate":
                 try:
                     delta = int(payload) if payload is not None else 0
@@ -734,7 +745,7 @@ class AlarmClockApp:
         while self.running:
             self._process_events()
             now = time.time()
-            if now - last_render >= 0.2:
+            if now - last_render >= 0.2 and self.state != State.STANDBY:
                 self._render()
                 self.tick += 1
                 last_render = now
