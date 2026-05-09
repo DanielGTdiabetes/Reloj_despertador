@@ -324,9 +324,17 @@ class AlarmClockApp:
         elif self.state == State.WIFI_SCAN:
             if self.wifi_networks:
                 self.wifi_ssid = self.wifi_networks[self.wifi_index].get("ssid", "")
-                self.wifi_password = ""
-                self.wifi_char_idx = 0
-                self.state = State.WIFI_PASSWORD
+                if self._nmcli_has_profile(self.wifi_ssid):
+                    # Red conocida por nmcli: conectar sin pedir contraseña
+                    self.status = "Conectando WiFi"
+                    self.state = State.CLOCK
+                    threading.Thread(
+                        target=self._wifi_connect_known, args=(self.wifi_ssid,), daemon=True
+                    ).start()
+                else:
+                    self.wifi_password = ""
+                    self.wifi_char_idx = 0
+                    self.state = State.WIFI_PASSWORD
         elif self.state == State.WIFI_PASSWORD:
             ch = WIFI_CHARS[self.wifi_char_idx]
             if ch == "OK":
@@ -510,6 +518,30 @@ class AlarmClockApp:
         except Exception as exc:
             self.status = "WiFi fallo"
             print(f"[WiFi] connect failed: {exc}")
+
+    def _nmcli_has_profile(self, ssid: str) -> bool:
+        """True si nmcli tiene ya un perfil guardado para este SSID."""
+        if not self._command_exists("nmcli"):
+            return False
+        try:
+            out = subprocess.check_output(
+                ["nmcli", "-t", "-f", "NAME", "connection", "show"],
+                text=True, timeout=3, stderr=subprocess.DEVNULL,
+            )
+            return ssid in out.splitlines()
+        except Exception:
+            return False
+
+    def _wifi_connect_known(self, ssid: str) -> None:
+        """Conecta a una red ya guardada en nmcli sin necesidad de contraseña."""
+        try:
+            subprocess.check_call(
+                ["nmcli", "dev", "wifi", "connect", ssid], timeout=25
+            )
+            self.status = "WiFi conectado"
+        except Exception as exc:
+            self.status = "WiFi fallo"
+            print(f"[WiFi] connect known failed: {exc}")
 
     def _command_exists(self, name):
         return subprocess.call(["which", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
