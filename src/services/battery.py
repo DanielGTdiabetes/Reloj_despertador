@@ -232,8 +232,25 @@ class BatteryService:
     def _do_shutdown(self) -> None:
         """Espera SHUTDOWN_DELAY segundos y ejecuta el apagado del sistema."""
         time.sleep(SHUTDOWN_DELAY)
+        self._prepare_auto_restart()
         log.critical("[Battery] ejecutando: sudo shutdown -h now")
         try:
             subprocess.run(["sudo", "shutdown", "-h", "now"], check=True)
         except Exception as exc:
             log.error("[Battery] shutdown falló: %s", exc)
+
+    def _prepare_auto_restart(self) -> None:
+        """Configura el HAT para auto-arrancar cuando vuelva la corriente.
+
+        Escribe el timer de 1 minuto y la señal de shutdown en el MCU del HAT
+        antes de que el sistema se apague, de forma que el HAT reinicie la Pi
+        automáticamente en cuanto la batería o la corriente externa se recupere.
+        """
+        if self._hat is None:
+            return
+        try:
+            self._hat.set_auto_restart(minutes=1)
+            self._hat.signal_shutdown()
+            log.info("[Battery] HAT configurado para auto-arranque en 1 min tras apagado")
+        except Exception as exc:
+            log.warning("[Battery] no se pudo configurar auto-arranque en el HAT: %s", exc)
