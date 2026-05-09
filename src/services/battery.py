@@ -33,6 +33,15 @@ CRITICAL_THRESHOLD = 15.0  # %  — nivel "critical" (aviso urgente)
 SHUTDOWN_THRESHOLD = 12.0  # %  — nivel "shutdown" (apagado seguro inmediato)
 SHUTDOWN_DELAY     = 10    # segundos de margen antes de ejecutar shutdown
 
+# ── Detección de alimentación externa ────────────────────────────────────────
+# El voltaje tiene separación clara entre modos (datos reales):
+#   • En red:     > 4100 mV  (típico: 4150–4200 mV, float-charging)
+#   • En batería: < 4050 mV  (típico: 3990–4040 mV)
+# Banda de histéresis 4050–4100 mV: mantiene estado anterior para evitar
+# oscilaciones en el límite. Detección en la primera lectura (~30 s).
+VOLT_MAINS_MV = 4100   # por encima → en red
+VOLT_BATT_MV  = 4050   # por debajo → en batería
+
 
 class BatteryService:
     """Gestiona la lectura y supervisión del DFR0528 UPS HAT.
@@ -79,6 +88,7 @@ class BatteryService:
         self._soc: float | None   = None
         self._volts: float | None = None   # mV
         self._level: str          = "unknown"
+        self._on_mains: bool = True   # asumir red en arranque
 
         self._hat     = None
         self._thread: threading.Thread | None = None
@@ -154,7 +164,7 @@ class BatteryService:
         """Snapshot thread-safe del estado de batería.
 
         Returns:
-            dict con claves 'soc', 'voltage_mv', 'level', o None si no disponible.
+            dict con claves 'soc', 'voltage_mv', 'level', 'on_mains', o None si no disponible.
         """
         if not self.available:
             return None
@@ -165,6 +175,7 @@ class BatteryService:
                 "soc":        self._soc,
                 "voltage_mv": self._volts,
                 "level":      self._level,
+                "on_mains":   self._on_mains,
             }
 
     # ── Loop interno ─────────────────────────────────────────────────────────
@@ -177,12 +188,14 @@ class BatteryService:
                 volts = self._hat.read_voltage_mv()
                 level = self._classify(soc)
 
+                on_mains = self._update_mains_state(volts)
                 with self._lock:
-                    self._soc   = soc
-                    self._volts = volts
-                    self._level = level
+                    self._soc      = soc
+                    self._volts    = volts
+                    self._level    = level
+                    self._on_mains = on_mains
 
-                print(f"[Battery] SOC={soc:.1f}%  V={volts:.0f}mV  level={level}", flush=True)
+                print(f"[Battery] SOC={soc:.1f}%  V={volts:.0f}mV  level={level}  mains={on_mains}", flush=True)
                 self._handle_level(level, soc)
 
             except Exception as exc:
@@ -204,6 +217,20 @@ class BatteryService:
                     pass
                 time.sleep(5.0)
                 elapsed += 5.0
+
+    def _update_mains_state(self, volts: float) -> bool:
+        """Detecta alimentación externa por umbral de voltaje.
+
+        En red el voltaje es >4100 mV (float-charging). En batería cae a
+        <4050 mV. La banda 4050–4100 mV mantiene el estado anterior para
+        evitar oscilaciones. Detección en la primera lectura (~30 s).
+        """
+        if volts >= VOLT_MAINS_MV:
+            self._on_mains = True
+        elif volts <= VOLT_BATT_MV:
+            self._on_mains = False
+        # else: banda de histéresis, sin cambio
+        return self._on_mains
 
     def _classify(self, soc: float) -> str:
         if soc <= self._shut_thr:
