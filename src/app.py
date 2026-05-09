@@ -405,39 +405,21 @@ class AlarmClockApp:
     def _wifi_scan_worker(self):
         networks = []
         try:
-            if self._command_exists("nmcli"):
-                out = subprocess.check_output(
-                    ["nmcli", "-t", "-f", "SSID,SIGNAL", "dev", "wifi", "list", "--rescan", "yes"],
-                    stderr=subprocess.DEVNULL, text=True, timeout=25,
-                )
-                for line in out.strip().splitlines():
-                    parts = line.split(":")
-                    if len(parts) < 2:
-                        continue
-                    ssid = parts[0].strip()
-                    if not ssid:
-                        continue
-                    try:
-                        bars = int(parts[1]) // 25
-                    except ValueError:
-                        bars = 2
-                    networks.append({"ssid": ssid, "signal": bars})
-            else:
-                out = subprocess.check_output(
-                    ["sudo", "-n", "/sbin/iwlist", "wlan0", "scan"],
-                    stderr=subprocess.DEVNULL, text=True, timeout=15,
-                )
-                for cell in out.split("Cell ")[1:]:
-                    ssid_match = re.search(r'ESSID:"([^"]*)"', cell)
-                    sig_match = re.search(r"Signal level=(-?\d+)", cell)
-                    if not ssid_match:
-                        continue
-                    ssid = ssid_match.group(1)
-                    if not ssid:
-                        continue
-                    sig = int(sig_match.group(1)) if sig_match else -75
-                    bars = max(0, min(4, (sig + 100) // 12))
-                    networks.append({"ssid": ssid, "signal": bars})
+            out = subprocess.check_output(
+                ["sudo", "-n", "iwlist", "wlan0", "scan"],
+                stderr=subprocess.DEVNULL, text=True, timeout=15,
+            )
+            for cell in out.split("Cell ")[1:]:
+                ssid_match = re.search(r'ESSID:"([^"]*)"', cell)
+                sig_match = re.search(r"Signal level=(-?\d+)", cell)
+                if not ssid_match:
+                    continue
+                ssid = ssid_match.group(1)
+                if not ssid:
+                    continue
+                sig = int(sig_match.group(1)) if sig_match else -75
+                bars = max(0, min(4, (sig + 100) // 12))
+                networks.append({"ssid": ssid, "signal": bars})
         except Exception as exc:
             print(f"[WiFi] scan failed: {exc}")
 
