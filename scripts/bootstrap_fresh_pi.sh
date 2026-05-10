@@ -34,7 +34,9 @@ apt-get install -y \
   python3-smbus2 \
   python3-venv \
   i2c-tools \
-  alsa-utils
+  alsa-utils \
+  pigpio \
+  python3-pigpio
 
 echo "[bootstrap] git version: $(git --version)"
 
@@ -69,8 +71,11 @@ function enable_overlay() {
 enable_dtparam "dtparam=spi=on"
 enable_overlay "dtoverlay=spi0-2cs"
 enable_dtparam "dtparam=i2c_arm=on"
-enable_dtparam "dtparam=i2s=on"
-enable_overlay "dtoverlay=max98357a"
+
+# GPIO18 se usa para PWM del backlight ST7789; eliminar overlays I2S/MAX98357A
+# que reclamarían ese pin y dejarían la pantalla apagada.
+sed -i 's/^[[:space:]]*dtparam=i2s=on/# dtparam=i2s=on/' "$BOOT_CONFIG"
+sed -i '/^[[:space:]]*dtoverlay=max98357a/d' "$BOOT_CONFIG"
 
 echo "[bootstrap] Generating alarm sounds..."
 python3 - <<'PY'
@@ -134,6 +139,8 @@ else
 fi
 
 systemctl daemon-reload
+systemctl enable pigpiod
+systemctl start pigpiod
 systemctl enable reloj.service
 
 echo "[bootstrap] Validating Python imports..."
@@ -152,6 +159,7 @@ modules = [
     "dateutil",
     "ntplib",
     "smbus2",
+    "pigpio",
 ]
 
 missing = []
