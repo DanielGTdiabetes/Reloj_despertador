@@ -52,8 +52,8 @@
         "sw_pin": 13
     },
     "audio": {
-        "enabled": false,
-        "device": "max98357a",
+        "enabled": true,
+        "device": "USB Audio",
         "alarm_sounds": [
             "src/assets/sounds/alarm1.wav",
             "src/assets/sounds/alarm2.wav"
