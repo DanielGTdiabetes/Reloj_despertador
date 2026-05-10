@@ -7,6 +7,7 @@ import threading
 import time
 import traceback
 
+import numpy as np
 from PIL import Image
 import RPi.GPIO as GPIO
 
@@ -659,6 +660,11 @@ class AlarmClockApp:
         self.state = State.CLOCK
         self.status = "Pospuesta"
 
+    def _software_dim(self, img: Image.Image, factor: float) -> Image.Image:
+        arr = np.asarray(img, dtype=np.float32)
+        arr = (arr * factor).clip(0, 255).astype(np.uint8)
+        return Image.fromarray(arr)
+
     def _render(self):
         now = self.clock.now()
         if self.state == State.ALARM_RINGING:
@@ -673,6 +679,11 @@ class AlarmClockApp:
         rect_img = self._render_rect(now, wifi_ssid=wifi_ssid)
 
         if self.displays:
+            if round_img is not None:
+                br = min(self.brightness_round, DIM_BRIGHTNESS_ROUND) if self._dimmed else self.brightness_round
+                factor = br / 100.0
+                if factor < 1.0:
+                    round_img = self._software_dim(round_img, factor)
             self.displays.submit(round_image=round_img, rect_image=rect_img)
 
     def _render_round(self, now, wifi_ssid=""):

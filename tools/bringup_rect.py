@@ -49,20 +49,23 @@ def main() -> int:
     print("[BRINGUP] spi.no_cs=True")
     print("[BRINGUP] DC GPIO22")
     print("[BRINGUP] RST GPIO27")
-    print("[BRINGUP] BL GPIO23 active LOW")
+    print("[BRINGUP] BL GPIO18 hardware PWM0 (pigpio)")
 
     CS_PIN = 16
     DC_PIN = 22
     RST_PIN = 27
-    BL_PIN = 23
+    BL_PIN = 18  # GPIO18 = hardware PWM0 (movido desde GPIO23 el 2026-05-10)
 
     GPIO.setup(CS_PIN, GPIO.OUT, initial=GPIO.HIGH)
     GPIO.setup(DC_PIN, GPIO.OUT, initial=GPIO.HIGH)
     GPIO.setup(RST_PIN, GPIO.OUT, initial=GPIO.HIGH)
-    GPIO.setup(BL_PIN, GPIO.OUT, initial=GPIO.HIGH)
 
-    pwm = GPIO.PWM(BL_PIN, 200)
-    pwm.start(100)
+    import pigpio
+    pi = pigpio.pi()
+    if not pi.connected:
+        print("[ERROR] pigpiod no responde — ejecuta: sudo pigpiod")
+        return 1
+    pi.hardware_PWM(BL_PIN, 200, 0)  # máx brillo (lógica invertida)
 
     spi = spidev.SpiDev()
     spi.open(0, 0)

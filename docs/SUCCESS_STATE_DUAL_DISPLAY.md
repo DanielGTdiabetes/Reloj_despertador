@@ -32,7 +32,7 @@ El CS del ST7789 se movió de GPIO7 (pin físico 26, CE1 hardware) a **GPIO16 (p
 | Redonda | RST | 37 | 26 |
 | Rectangular | DC | 15 | 22 |
 | Rectangular | RST | 13 | 27 |
-| Rectangular | BL | 16 | 23 |
+| Rectangular | BL | **12** | **18** (hw PWM0) |
 
 ## Configuración Software Validada
 
@@ -45,7 +45,7 @@ El CS del ST7789 se movió de GPIO7 (pin físico 26, CE1 hardware) a **GPIO16 (p
   },
   "rect": {
     "spi_port": 0, "spi_device": 1,
-    "cs_pin": 16, "dc_pin": 22, "rst_pin": 27, "bl_pin": 23,
+    "cs_pin": 16, "dc_pin": 22, "rst_pin": 27, "bl_pin": 18,
     "col_offset": 18, "row_offset": 82
   }
 }
@@ -56,15 +56,15 @@ El CS del ST7789 se movió de GPIO7 (pin físico 26, CE1 hardware) a **GPIO16 (p
 dtparam=spi=on
 dtoverlay=spi0-2cs
 dtparam=i2c_arm=on
-dtoverlay=max98357a
 camera_auto_detect=0
 display_auto_detect=0
+# dtoverlay=max98357a  ← ELIMINADO (2026-05-10): audio I2S retirado del montaje
 ```
 
 ### ST7789 parámetros validados
 - MADCTL: `0xA0` | COLMOD: `0x05` | INVOFF
 - col_offset: 18, row_offset: 82
-- Backlight activo-LOW en GPIO23
+- Backlight en **GPIO18** (hardware PWM0 via pigpio) — movido desde GPIO23 el 2026-05-10
 - `spi_device=1` → `/dev/spidev0.1`
 - `no_cs=True` → CS controlado por GPIO16, no por kernel
 - CS manual: GPIO16 siempre HIGH excepto durante transacción SPI

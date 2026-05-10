@@ -15,9 +15,16 @@ dtoverlay=spi0-2cs
 # ── I2C ─────────────────────────────────────────────────────────────────────
 dtparam=i2c_arm=on
 
-# ── Audio I2S MAX98357A ──────────────────────────────────────────────────────
-# NO habilitar SPI1: entra en conflicto con I2S
-dtoverlay=max98357a
+# ── Audio ────────────────────────────────────────────────────────────────────
+# MAX98357A (I2S) ELIMINADO — causaba pantalla rectangular en blanco.
+# GPIO18/19/21 libres. GPIO18 reasignado a BL ST7789 (hardware PWM0).
+# Pendiente: tarjeta de sonido USB vía OTG.
+# dtparam=i2s=on          ← NO activar, no hay I2S
+# dtoverlay=max98357a     ← NO activar
+
+# ── pigpiod (hardware PWM para backlight ST7789) ─────────────────────────────
+# El backlight de la rectangular usa pigpio.hardware_PWM() en GPIO18.
+# Debe estar corriendo: sudo systemctl enable pigpiod && sudo systemctl start pigpiod
 
 # ── Watchdog hardware (BCM2835) ──────────────────────────────────────────────
 # Activa /dev/watchdog. systemd lo consume vía WatchdogSec= en el servicio.

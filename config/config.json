@@ -41,7 +41,7 @@
             "cs_pin": 16,
             "dc_pin": 22,
             "rst_pin": 27,
-            "bl_pin": 23,
+            "bl_pin": 18,
             "col_offset": 18,
             "row_offset": 82
         }

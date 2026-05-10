@@ -170,8 +170,8 @@ def audit_pinctrl():
                 check(f"  -> GPIO22 es output", True)
             if pin == 27:
                 check(f"  -> GPIO27 es output", True)
-            if pin == 23:
-                check(f"  -> GPIO23 es output/PWM", True)
+            if pin == 18:
+                check(f"  -> GPIO18 es hardware PWM0 (BL ST7789)", True)
         else:
             check(f"GPIO{pin} ({desc})", False, err or "pinctrl no disponible")
 
@@ -212,7 +212,7 @@ def audit_code_state():
         check("cs_pin = 16", rect.get("cs_pin") == 16, f"valor: {rect.get('cs_pin')}")
         check("dc_pin = 22", rect.get("dc_pin") == 22, f"valor: {rect.get('dc_pin')}")
         check("rst_pin = 27", rect.get("rst_pin") == 27, f"valor: {rect.get('rst_pin')}")
-        check("bl_pin = 23", rect.get("bl_pin") == 23, f"valor: {rect.get('bl_pin')}")
+        check("bl_pin = 18", rect.get("bl_pin") == 18, f"valor: {rect.get('bl_pin')}")
         check("col_offset = 18", rect.get("col_offset") == 18, f"valor: {rect.get('col_offset')}")
         check("row_offset = 82", rect.get("row_offset") == 82, f"valor: {rect.get('row_offset')}")
 

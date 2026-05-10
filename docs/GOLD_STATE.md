@@ -14,7 +14,7 @@ Este documento describe la configuración exacta y validada que hace funcionar e
   - `CS`: GPIO 16 (Manual, modo `no_cs=True`).
   - `DC`: GPIO 22.
   - `RST`: GPIO 27.
-  - `BL`: GPIO 23 (Control PWM).
+  - `BL`: **GPIO 18** (hardware PWM0 via pigpio — movido desde GPIO23 el 2026-05-10).
 
 ### Pantalla Redonda (GC9A01)
 - **Resolución:** 240x240 píxeles.
@@ -33,9 +33,11 @@ El archivo de boot config suele ser `/boot/firmware/config.txt` (o `/boot/config
 dtparam=spi=on
 dtoverlay=spi0-2cs
 dtparam=i2c_arm=on
-dtparam=i2s=on
-dtoverlay=max98357a
 ```
+
+> ❌ `dtparam=i2s=on` y `dtoverlay=max98357a` **eliminados** (2026-05-10).  
+> El MAX98357A causaba pantalla rectangular en blanco. Audio desactivado.  
+> GPIO18 reasignado a BL ST7789 (hardware PWM0).
 
 ### Recomendado (pero no imprescindible para las pantallas)
 ```ini
@@ -69,7 +71,7 @@ La app escanea redes con `sudo -n /sbin/iwlist wlan0 scan`. En una instalación 
             "cs_pin": 16,
             "dc_pin": 22,
             "rst_pin": 27,
-            "bl_pin": 23,
+            "bl_pin": 18,
             "col_offset": 18,
             "row_offset": 82
         }
