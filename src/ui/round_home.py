@@ -118,6 +118,29 @@ class RoundHomeScreen:
             else:
                 draw.ellipse([x - r, y - r, x + r, y + r], fill=color)
 
+    def _draw_wifi_indicator(self, draw, connected: bool = True) -> None:
+        bx, by = 177, 154
+        col = CYAN if connected else (55, 60, 75)
+        for radius in (8, 14, 20):
+            draw.arc(
+                [bx - radius, by - radius, bx + radius, by + radius],
+                215,
+                325,
+                fill=col,
+                width=2,
+            )
+        draw.ellipse([bx - 2, by + 8, bx + 2, by + 12], fill=col)
+        if not connected:
+            draw.line([bx - 8, by + 17, bx + 8, by + 1], fill=(180, 45, 45), width=2)
+
+    def _draw_status_indicator(self, img, draw, battery, wifi_ssid: str) -> None:
+        level = battery.get("level", "ok") if battery else "ok"
+        on_mains = battery.get("on_mains", True) if battery else True
+        if battery and (level in ("warning", "critical", "shutdown") or not on_mains):
+            self._draw_battery_indicator(img, battery)
+            return
+        self._draw_wifi_indicator(draw, connected=bool(wifi_ssid))
+
     def _draw_battery_indicator(self, img, battery_state) -> None:
         """Indicador de batería — lado derecho, simétrico al icono de alarma.
 
@@ -173,7 +196,7 @@ class RoundHomeScreen:
         tw = bb[2] - bb[0]
         draw.text((bx - tw // 2, y1 + 3), pct_str, font=F.small, fill=col)
 
-    def render(self, now, weather, sun_info, moon, alarm, status, battery=None) -> Image.Image:
+    def render(self, now, weather, sun_info, moon, alarm, status, battery=None, wifi_ssid="") -> Image.Image:
         period = sun_info.get("period", "day")
         th = self._period_theme(period)
 
@@ -214,7 +237,7 @@ class RoundHomeScreen:
         self._draw_sidebar_alarm(img, alarm)
 
         # Indicador de Batería LATERAL (derecha, simétrico a la alarma)
-        self._draw_battery_indicator(img, battery)
+        self._draw_status_indicator(img, draw, battery, wifi_ssid)
 
         # Desc y Temp
         _text_center(draw, 178, desc[:22], F.small, DIM_WHITE)
@@ -223,7 +246,7 @@ class RoundHomeScreen:
 
         return img
 
-    def render_night(self, now, moon, alarm, sun_info=None, battery=None) -> Image.Image:
+    def render_night(self, now, moon, alarm, sun_info=None, battery=None, wifi_ssid="") -> Image.Image:
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
 
@@ -248,7 +271,7 @@ class RoundHomeScreen:
         self._draw_sidebar_alarm(img, alarm)
 
         # Indicador de batería (modo noche — esquina derecha)
-        self._draw_battery_indicator(img, battery)
+        self._draw_status_indicator(img, draw, battery, wifi_ssid)
 
         return img
 

@@ -26,12 +26,22 @@ log = logging.getLogger(__name__)
 
 # ── Constantes de comportamiento ─────────────────────────────────────────────
 
-POLL_INTERVAL      = 30    # segundos entre lecturas en estado normal
+POLL_INTERVAL      = 10    # segundos entre lecturas en estado normal
 CRITICAL_INTERVAL  =  5    # segundos en estado crítico / shutdown
 WARNING_THRESHOLD  = 20.0  # %  — nivel "warning" (aviso visual + status)
-CRITICAL_THRESHOLD = 10.0  # %  — nivel "critical" (aviso urgente)
-SHUTDOWN_THRESHOLD =  2.0  # %  — nivel "shutdown" (apagado seguro inmediato)
+CRITICAL_THRESHOLD = 15.0  # %  — nivel "critical" (aviso urgente)
+SHUTDOWN_THRESHOLD = 12.0  # %  — nivel "shutdown" (apagado seguro inmediato)
 SHUTDOWN_DELAY     = 10    # segundos de margen antes de ejecutar shutdown
+
+# ── Detección de alimentación externa ────────────────────────────────────────
+# El voltaje tiene separación clara entre modos (datos reales):
+#   • En red:     > 4100 mV  (típico: 4150–4200 mV, float-charging)
+#   • En batería: < 4050 mV  (típico: 3990–4040 mV)
+# Banda de histéresis 4050–4100 mV: mantiene estado anterior para evitar
+# oscilaciones en el límite. Detección en la primera lectura (~30 s).
+VOLT_MAINS_MV = 4130   # por encima -> en red/cargando
+VOLT_BATT_MV  = 4100   # por debajo -> en bateria
+SOC_TREND_EPS = 0.03   # cambio minimo de SOC para considerar tendencia real
 
 
 class BatteryService:
@@ -79,6 +89,8 @@ class BatteryService:
         self._soc: float | None   = None
         self._volts: float | None = None   # mV
         self._level: str          = "unknown"
+        self._on_mains: bool = True   # asumir red en arranque
+        self._last_soc: float | None = None
 
         self._hat     = None
         self._thread: threading.Thread | None = None
@@ -104,9 +116,9 @@ class BatteryService:
             hat.open()
             ver = hat.read_version()
             self._hat = hat
-            log.info("[Battery] UPS HAT OK — firmware %s", ver)
+            print(f"[Battery] UPS HAT OK — firmware {ver}", flush=True)
         except Exception as exc:
-            log.warning("[Battery] HAT no disponible: %s", exc)
+            print(f"[Battery] HAT no disponible: {exc}", flush=True)
             return False
 
         self._running = True
@@ -154,7 +166,7 @@ class BatteryService:
         """Snapshot thread-safe del estado de batería.
 
         Returns:
-            dict con claves 'soc', 'voltage_mv', 'level', o None si no disponible.
+            dict con claves 'soc', 'voltage_mv', 'level', 'on_mains', o None si no disponible.
         """
         if not self.available:
             return None
@@ -165,6 +177,7 @@ class BatteryService:
                 "soc":        self._soc,
                 "voltage_mv": self._volts,
                 "level":      self._level,
+                "on_mains":   self._on_mains,
             }
 
     # ── Loop interno ─────────────────────────────────────────────────────────
@@ -177,16 +190,23 @@ class BatteryService:
                 volts = self._hat.read_voltage_mv()
                 level = self._classify(soc)
 
-                with self._lock:
-                    self._soc   = soc
-                    self._volts = volts
-                    self._level = level
+                try:
+                    hardware_mains = self._hat.is_on_mains()
+                except Exception:
+                    hardware_mains = None
 
-                log.debug("[Battery] SOC=%.1f%%  V=%.0fmV  level=%s", soc, volts, level)
+                on_mains = self._update_mains_state(soc, volts, hardware_mains)
+                with self._lock:
+                    self._soc      = soc
+                    self._volts    = volts
+                    self._level    = level
+                    self._on_mains = on_mains
+
+                print(f"[Battery] SOC={soc:.1f}%  V={volts:.0f}mV  level={level}  mains={on_mains}", flush=True)
                 self._handle_level(level, soc)
 
             except Exception as exc:
-                log.warning("[Battery] error de lectura I2C: %s", exc)
+                print(f"[Battery] error de lectura I2C: {exc}", flush=True)
 
             # Reducir intervalo cuando la batería está baja
             interval = (
@@ -194,7 +214,44 @@ class BatteryService:
                 if self._level in ("critical", "shutdown")
                 else POLL_INTERVAL
             )
-            time.sleep(interval)
+
+            # Enviar latido al watchdog del HAT cada ciclo para que sepa que la Pi está viva
+            elapsed = 0.0
+            while self._running and elapsed < interval:
+                try:
+                    self._hat.send_watchdog()
+                except Exception:
+                    pass
+                time.sleep(5.0)
+                elapsed += 5.0
+
+    def _update_mains_state(self, soc: float, volts: float, hardware_mains: bool | None = None) -> bool:
+        """Detecta alimentacion externa combinando SOC, voltaje y bit del HAT.
+
+        La senal mas fiable en este montaje es la tendencia del SOC: si baja,
+        esta consumiendo bateria; si sube, esta cargando. Cuando el SOC esta
+        clavado al 100%, usamos voltaje y el bit POWAM del HAT como apoyo.
+        """
+        trend_mains = None
+        if self._last_soc is not None:
+            delta = soc - self._last_soc
+            if delta <= -SOC_TREND_EPS:
+                trend_mains = False
+            elif delta >= SOC_TREND_EPS:
+                trend_mains = True
+        self._last_soc = soc
+        if trend_mains is not None:
+            self._on_mains = trend_mains
+            return self._on_mains
+
+        if volts >= VOLT_MAINS_MV:
+            self._on_mains = True
+        elif volts <= VOLT_BATT_MV:
+            self._on_mains = False
+        elif hardware_mains is not None:
+            self._on_mains = hardware_mains
+
+        return self._on_mains
 
     def _classify(self, soc: float) -> str:
         if soc <= self._shut_thr:
@@ -232,8 +289,25 @@ class BatteryService:
     def _do_shutdown(self) -> None:
         """Espera SHUTDOWN_DELAY segundos y ejecuta el apagado del sistema."""
         time.sleep(SHUTDOWN_DELAY)
+        self._prepare_auto_restart()
         log.critical("[Battery] ejecutando: sudo shutdown -h now")
         try:
             subprocess.run(["sudo", "shutdown", "-h", "now"], check=True)
         except Exception as exc:
             log.error("[Battery] shutdown falló: %s", exc)
+
+    def _prepare_auto_restart(self) -> None:
+        """Configura el HAT para auto-arrancar cuando vuelva la corriente.
+
+        Escribe el timer de 1 minuto y la señal de shutdown en el MCU del HAT
+        antes de que el sistema se apague, de forma que el HAT reinicie la Pi
+        automáticamente en cuanto la batería o la corriente externa se recupere.
+        """
+        if self._hat is None:
+            return
+        try:
+            self._hat.set_auto_restart(minutes=1)
+            self._hat.signal_shutdown()
+            log.info("[Battery] HAT configurado para auto-arranque en 1 min tras apagado")
+        except Exception as exc:
+            log.warning("[Battery] no se pudo configurar auto-arranque en el HAT: %s", exc)

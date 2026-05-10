@@ -7,6 +7,7 @@ import threading
 import time
 import traceback
 
+from PIL import Image
 import RPi.GPIO as GPIO
 
 from config_loader import load_config, save_config
@@ -33,6 +34,7 @@ class State:
     WIFI_PASSWORD = "wifi_password"
     ALARM_RINGING = "alarm_ringing"
     LOCATION = "location"
+    STANDBY = "standby"
 
 
 MENU_ITEMS = [
@@ -51,6 +53,10 @@ WIFI_CHARS = (
     list("0123456789") +
     list(" !@#$%&*()-_+=.,:;?/\"\\'")
 )
+
+DIM_TIMEOUT = 180
+DIM_BRIGHTNESS_ROUND = 15
+DIM_BRIGHTNESS_RECT = 45
 
 
 class AlarmClockApp:
@@ -84,6 +90,9 @@ class AlarmClockApp:
         self.brightness_rect = int(ui_cfg.get("brightness_rect", 80))
         self.brightness_target = "round"
         self.brightness_editing = False
+        self._last_interaction = time.time()
+        self._dimmed = False
+        self._standby_needs_black = False
 
         self.wifi_networks = []
         self.wifi_index = 0
@@ -91,6 +100,8 @@ class AlarmClockApp:
         self.wifi_ssid = ""
         self.wifi_password = ""
         self.wifi_char_idx = 0
+        self._connected_ssid = ""
+        self._wifi_check_time = 0.0
 
         self.weather_updating = False
         postal = self.config.get("location", {}).get("postal_code", "00000")
@@ -140,7 +151,8 @@ class AlarmClockApp:
             bus=ups_cfg.get("i2c_bus", 1),
             address=addr_raw,
             warning_threshold=ups_cfg.get("warning_threshold", 20.0),
-            shutdown_threshold=ups_cfg.get("shutdown_threshold", 2.0),
+            critical_threshold=ups_cfg.get("critical_threshold", 15.0),
+            shutdown_threshold=ups_cfg.get("shutdown_threshold", 12.0),
             on_low_battery=self._on_battery_low,
             on_shutdown_required=self._on_battery_shutdown,
         )
@@ -174,6 +186,7 @@ class AlarmClockApp:
                 self.encoder.on("rotate_ccw", self._on_ccw)
                 self.encoder.on("button_press", self._on_press)
                 self.encoder.on("button_long_press", self._on_long_press)
+                self.encoder.on("button_power_press", self._on_power_press)
                 print("[HW] encoder OK")
             except Exception as exc:
                 print(f"[HW] encoder failed: {exc}")
@@ -282,6 +295,28 @@ class AlarmClockApp:
     def _on_long_press(self):
         self._emit_event("encoder_long_press")
 
+    def _on_power_press(self):
+        self._emit_event("encoder_power_press")
+
+    def _handle_power_press(self) -> None:
+        if self.state == State.STANDBY:
+            self._standby_exit()
+        else:
+            self._standby_enter()
+
+    def _standby_enter(self) -> None:
+        print("[Standby] entrando", flush=True)
+        self.state = State.STANDBY
+        self._dimmed = False
+        self._standby_needs_black = True
+
+    def _standby_exit(self) -> None:
+        print("[Standby] saliendo", flush=True)
+        self.state = State.CLOCK
+        self._dimmed = False
+        self._last_interaction = time.time()
+        self._apply_brightness()
+
     def _handle_press(self) -> None:
         if self.state == State.CLOCK:
             self.state = State.MENU
@@ -295,9 +330,18 @@ class AlarmClockApp:
         elif self.state == State.WIFI_SCAN:
             if self.wifi_networks:
                 self.wifi_ssid = self.wifi_networks[self.wifi_index].get("ssid", "")
-                self.wifi_password = ""
-                self.wifi_char_idx = 0
-                self.state = State.WIFI_PASSWORD
+                if self._nmcli_has_profile(self.wifi_ssid):
+                    self.status = "Conectando WiFi"
+                    self.state = State.CLOCK
+                    threading.Thread(
+                        target=self._wifi_connect_known,
+                        args=(self.wifi_ssid,),
+                        daemon=True,
+                    ).start()
+                else:
+                    self.wifi_password = ""
+                    self.wifi_char_idx = 0
+                    self.state = State.WIFI_PASSWORD
         elif self.state == State.WIFI_PASSWORD:
             ch = WIFI_CHARS[self.wifi_char_idx]
             if ch == "OK":
@@ -393,6 +437,24 @@ class AlarmClockApp:
         self._apply_brightness()
         self.status = "Brillo guardado"
 
+    def _mark_interaction(self) -> None:
+        self._last_interaction = time.time()
+        if self._dimmed:
+            self._dimmed = False
+            self._apply_brightness()
+
+    def _update_auto_dim(self) -> None:
+        if self._dimmed or self.state in (State.ALARM_RINGING, State.STANDBY):
+            return
+        if time.time() - self._last_interaction < DIM_TIMEOUT:
+            return
+        if self.displays:
+            self._dimmed = True
+            self.displays.set_brightness(
+                round_percent=min(self.brightness_round, DIM_BRIGHTNESS_ROUND),
+                rect_percent=min(self.brightness_rect, DIM_BRIGHTNESS_RECT),
+            )
+
     def _start_wifi_scan(self):
         if self.wifi_scanning:
             return
@@ -404,7 +466,13 @@ class AlarmClockApp:
     def _wifi_scan_worker(self):
         networks = []
         try:
-            out = subprocess.check_output(["sudo", "-n", "/sbin/iwlist", "wlan0", "scan"], stderr=subprocess.DEVNULL, text=True, timeout=15)
+            iwlist = "iwlist" if self._command_exists("iwlist") else "/sbin/iwlist"
+            out = subprocess.check_output(
+                ["sudo", "-n", iwlist, "wlan0", "scan"],
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=15,
+            )
             for cell in out.split("Cell ")[1:]:
                 ssid_match = re.search(r'ESSID:"([^"]*)"', cell)
                 sig_match = re.search(r"Signal level=(-?\d+)", cell)
@@ -460,6 +528,49 @@ class AlarmClockApp:
         except Exception as exc:
             self.status = "WiFi fallo"
             print(f"[WiFi] connect failed: {exc}")
+
+    def _nmcli_has_profile(self, ssid: str) -> bool:
+        if not ssid or not self._command_exists("nmcli"):
+            return False
+        try:
+            out = subprocess.check_output(
+                ["nmcli", "-t", "-f", "NAME", "connection", "show"],
+                text=True,
+                timeout=3,
+                stderr=subprocess.DEVNULL,
+            )
+            return ssid in out.splitlines()
+        except Exception:
+            return False
+
+    def _wifi_connect_known(self, ssid: str) -> None:
+        try:
+            subprocess.check_call(
+                ["nmcli", "dev", "wifi", "connect", ssid],
+                timeout=25,
+            )
+            self.status = "WiFi conectado"
+        except Exception as exc:
+            self.status = "WiFi fallo"
+            print(f"[WiFi] connect known failed: {exc}")
+
+    def _get_connected_ssid(self) -> str:
+        now = time.time()
+        if now - self._wifi_check_time < 30:
+            return self._connected_ssid
+
+        self._wifi_check_time = now
+        try:
+            out = subprocess.check_output(
+                ["iwgetid", "-r"],
+                text=True,
+                timeout=2,
+                stderr=subprocess.DEVNULL,
+            )
+            self._connected_ssid = out.strip()
+        except Exception:
+            self._connected_ssid = ""
+        return self._connected_ssid
 
     def _command_exists(self, name):
         return subprocess.call(["which", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
@@ -557,13 +668,14 @@ class AlarmClockApp:
         elif self.state != State.ALARM:
             self._check_alarm(now)
 
-        round_img = self._render_round(now)
-        rect_img = self._render_rect(now)
+        wifi_ssid = self._get_connected_ssid()
+        round_img = self._render_round(now, wifi_ssid=wifi_ssid)
+        rect_img = self._render_rect(now, wifi_ssid=wifi_ssid)
 
         if self.displays:
             self.displays.submit(round_image=round_img, rect_image=rect_img)
 
-    def _render_round(self, now):
+    def _render_round(self, now, wifi_ssid=""):
         # Estado de batería para el render (None si HAT no disponible)
         batt = self.battery.get_state() if self.battery else None
 
@@ -580,7 +692,7 @@ class AlarmClockApp:
             # ── Pantalla de noche con luna por fases ─────────────────────────
             if sun_info["period"] == "night":
                 return self.ui_round.render_night(
-                    now, moon, self.alarm, sun_info, battery=batt
+                    now, moon, self.alarm, sun_info, battery=batt, wifi_ssid=wifi_ssid
                 )
             # ─────────────────────────────────────────────────────────────────
 
@@ -593,7 +705,7 @@ class AlarmClockApp:
                 current.setdefault("temp_min", today.get("temp_min"))
 
             return self.ui_round.render(now, current, sun_info, moon,
-                                        self.alarm, self.status, battery=batt)
+                                        self.alarm, self.status, battery=batt, wifi_ssid=wifi_ssid)
 
         if self.state == State.MENU:
             key, label = MENU_ITEMS[self.menu_index]
@@ -641,7 +753,7 @@ class AlarmClockApp:
 
         return None
 
-    def _render_rect(self, now):
+    def _render_rect(self, now, wifi_ssid=""):
         if self.state == State.CLOCK:
             period = self.sun.get_time_of_day()
             return self.ui_rect.render_forecast(self._forecast_for_ui(), period=period)
@@ -658,7 +770,7 @@ class AlarmClockApp:
         if self.state == State.BRIGHTNESS:
             return self.ui_rect.render_brightness(self.brightness_round, self.brightness_rect, self.brightness_target, self.brightness_editing)
         if self.state == State.WIFI_SCAN:
-            return self.ui_rect.render_wifi_scan(self.wifi_networks, self.wifi_index, self.wifi_scanning)
+            return self.ui_rect.render_wifi_scan(self.wifi_networks, self.wifi_index, self.wifi_scanning, connected_ssid=wifi_ssid)
         if self.state == State.WIFI_PASSWORD:
             return self.ui_rect.render_wifi_keyboard(
                 self.wifi_ssid,
@@ -692,6 +804,14 @@ class AlarmClockApp:
             except queue.Empty:
                 return
 
+            if self.state == State.STANDBY:
+                if kind in ("encoder_rotate", "encoder_press", "encoder_long_press", "encoder_power_press"):
+                    self._standby_exit()
+                continue
+
+            if kind in ("encoder_rotate", "encoder_press", "encoder_long_press"):
+                self._mark_interaction()
+
             if kind == "encoder_rotate":
                 try:
                     delta = int(payload) if payload is not None else 0
@@ -702,6 +822,8 @@ class AlarmClockApp:
                 self._handle_press()
             elif kind == "encoder_long_press":
                 self._handle_long_press()
+            elif kind == "encoder_power_press":
+                self._handle_power_press()
 
     def run(self):
         print("[Main] starting")
@@ -710,10 +832,18 @@ class AlarmClockApp:
         while self.running:
             self._process_events()
             now = time.time()
-            if now - last_render >= 0.2:
+            if now - last_render >= 0.2 and self.state != State.STANDBY:
                 self._render()
                 self.tick += 1
                 last_render = now
+            if self._standby_needs_black and self.displays:
+                self._standby_needs_black = False
+                self.displays.submit(
+                    round_image=Image.new("RGB", (240, 240), (0, 0, 0)),
+                    rect_image=Image.new("RGB", (284, 76), (0, 0, 0)),
+                )
+                self.displays.set_brightness(round_percent=0, rect_percent=0)
+            self._update_auto_dim()
             if now - last_weather_check >= 15.0:
                 if not self.flags.disable_weather and self.weather.should_update():
                     threading.Thread(target=self._refresh_weather, daemon=True).start()

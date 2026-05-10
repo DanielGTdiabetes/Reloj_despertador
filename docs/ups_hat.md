@@ -24,6 +24,8 @@ dtparam=i2c_arm=on   ← ya presente, no tocar
 
 ## Registro map
 
+### Lectura (monitoreo de batería)
+
 | Registro | Nombre  | R/W | Descripción                         |
 |----------|---------|-----|-------------------------------------|
 | 0x00     | ADDR    | R/W | Dirección I2C esclavo (defecto 0x10)|
@@ -40,17 +42,38 @@ voltage_mv = ((VCELL_H << 8) | VCELL_L) * 1.25
 soc_pct    = ((SOC_H  << 8) | SOC_L)   * 0.003906   → clamp [0, 100]
 ```
 
+### Control de energía (auto-arranque y watchdog)
+
+Registros compatibles con el protocolo `dfups.c` de DFRobot ([raspberrypi_ups](https://github.com/DFRobot/raspberrypi_ups)):
+
+| Registro | Nombre   | R/W | Descripción                                           |
+|----------|----------|-----|-------------------------------------------------------|
+| 0x09     | FUNCTION | R/W | Flags: bit4=watchdog, bit3=LED, bit2=RGB, bit1=shutdown, bit0=powam |
+| 0x0D     | TIMER_H  | R/W | Timer auto-arranque, byte alto (minutos)              |
+| 0x0E     | TIMER_L  | R/W | Timer auto-arranque, byte bajo (minutos)              |
+| 0x0F     | WATCHDOG | W   | Latido del MCU: escribir `0x14` cada ≤ 10 s           |
+
+```python
+# Leer/escribir timer (minutos):
+timer = (TIMER_H << 8) | TIMER_L
+```
+
 ---
 
 ## Archivos del proyecto
 
 | Archivo | Función |
 |---------|---------|
-| `src/hardware/ups_hat.py` | Driver I2C de bajo nivel |
-| `src/services/battery.py` | Servicio de monitoreo (hilo daemon) |
+| `src/hardware/ups_hat.py` | Driver I2C de bajo nivel + control de energía |
+| `src/services/battery.py` | Servicio de monitoreo (hilo daemon) + shutdown seguro |
 | `src/ui/round_home.py` | Indicador visual en pantalla redonda |
 | `src/app.py` | Integración con la app principal |
 | `config/config.json` → sección `ups` | Configuración (ON/OFF, umbrales) |
+| `scripts/ups_watchdog.py` | Daemon de latido I2C + configuración auto-arranque al boot |
+| `scripts/ups-watchdog.service` | Servicio systemd del watchdog |
+| `scripts/ups_auto_start.py` | Herramienta de diagnóstico y configuración puntual |
+| `scripts/install_ups_auto_start.sh` | Instalador del servicio watchdog |
+| `scripts/deploy_ups_auto_start.py` | Script de deploy desde el PC al Pi |
 
 ---
 
@@ -64,6 +87,74 @@ soc_pct    = ((SOC_H  << 8) | SOC_L)   * 0.003906   → clamp [0, 100]
     "warning_threshold": 20,   ← % para aviso "batería baja"
     "shutdown_threshold": 2    ← % para apagado seguro
 }
+```
+
+---
+
+## Auto-arranque tras corte de corriente
+
+> [!NOTE]
+> Problema resuelto: cuando la batería se agotaba completamente y volvía la electricidad, la Pi no arrancaba sola — había que pulsar el botón del HAT manualmente.
+
+### Causa
+
+El MCU del DFR0528 arranca en modo **"espera botón"** por defecto. Para que cambie a modo **"arranque automático"** hay que escribir un timer en los registros `0x0D-0x0E`. El MCU almacena este valor en **memoria no volátil (flash)**, por lo que persiste aunque la batería se agote del todo.
+
+### Mecanismo
+
+```
+Pi arranca
+   └─► ups-watchdog.service inicia
+         └─► Escribe timer = 1 min en el MCU  (persiste en flash)
+         └─► Envía latido I2C cada 5 s
+
+Corte de corriente → batería se agota → Pi se apaga
+   └─► battery.py llama set_auto_restart(1) + signal_shutdown() antes de shutdown
+
+MCU pierde corriente → flash conserva timer = 1 min
+
+Vuelve la electricidad
+   └─► MCU arranca, lee timer almacenado (1 min)
+   └─► Espera 1 minuto
+   └─► Enciende la Pi automáticamente ✓
+```
+
+### Instalación en la Pi (primera vez)
+
+```bash
+# Desde el PC de desarrollo:
+python3 scripts/deploy_ups_auto_start.py
+
+# O manualmente en la Pi:
+sudo bash /home/dani/reloj_despertador/scripts/install_ups_auto_start.sh
+```
+
+### Verificar que funciona
+
+```bash
+# En la Pi:
+sudo systemctl status ups-watchdog.service
+
+# Ver logs en tiempo real:
+sudo journalctl -u ups-watchdog.service -f
+
+# Comprobar timer configurado:
+python3 /home/dani/reloj_despertador/scripts/ups_auto_start.py --info
+```
+
+Salida esperada:
+```
+[UPS] HAT V1.0 — SOC=85%
+[UPS] Auto-arranque configurado: 1 min tras corte de corriente
+```
+
+### Ajustar el tiempo de espera
+
+Por defecto: **1 minuto** (suficiente para que la batería se estabilice).
+
+Para cambiarlo, editar `AUTO_RESTART_MINUTES` en `scripts/ups_watchdog.py` y reiniciar:
+```bash
+sudo systemctl restart ups-watchdog.service
 ```
 
 ---
@@ -162,8 +253,12 @@ Cuando SOC ≤ `shutdown_threshold` (2% por defecto):
 
 1. Se activa `_on_battery_shutdown()` en la app
 2. La pantalla muestra `"BATERÍA AGOTADA — APAGANDO"`
-3. Tras **10 segundos** el servicio ejecuta `sudo shutdown -h now`
-4. La Pi se apaga limpiamente sin corrupción de SD
+3. Tras **10 segundos**, `battery.py` llama a:
+   - `hat.set_auto_restart(minutes=1)` → graba timer en flash del MCU
+   - `hat.signal_shutdown()` → notifica al MCU que el apagado es intencional
+4. El servicio ejecuta `sudo shutdown -h now`
+5. La Pi se apaga limpiamente sin corrupción de SD
+6. Cuando vuelva la corriente (o la batería se recupere), el MCU arrancará la Pi automáticamente en 1 minuto
 
 ---
 
@@ -182,6 +277,8 @@ El bus I2C es independiente del SPI de las pantallas; no hay conflicto.
 
 ## Solución de problemas
 
+### Monitoreo de batería
+
 | Síntoma | Causa probable | Solución |
 |---------|---------------|----------|
 | `smbus2 no instalado` | Falta pip | `pip install smbus2` en la Pi |
@@ -189,3 +286,15 @@ El bus I2C es independiente del SPI de las pantallas; no hay conflicto.
 | `PID inesperado: 0xXX` | Dirección I2C incorrecta | Revisar `i2c_address` en config |
 | No aparece indicador en pantalla | `enabled: false` en config | Cambiar a `true` |
 | SOC siempre 0% | HAT sin batería conectada | Conectar LiPo al conector JST |
+
+### Auto-arranque
+
+| Síntoma | Causa probable | Solución |
+|---------|---------------|----------|
+| Pi no arranca sola tras corte | `ups-watchdog.service` no instalado | `sudo bash scripts/install_ups_auto_start.sh` |
+| Timer muestra 0 min | Registros de control no accesibles en este firmware | Ver nota abajo |
+| `ups-watchdog.service` en estado `failed` | HAT no presente al arrancar | Normal si el HAT no está conectado; el servicio sale limpiamente |
+| Pi arranca pero watchdog no aparece en logs | systemd no habilitó el servicio | `sudo systemctl enable --now ups-watchdog.service` |
+
+> [!WARNING]
+> **Nota sobre compatibilidad de registros:** El mapa de registros de control de energía (0x09, 0x0D-0x0F) está documentado en el `dfups.c` de DFRobot para el modelo original (dirección I2C 0x18). El DFR0528 usa dirección 0x10; si los registros de control no responden, puede ser necesario también probar con address=0x18 en `ups_watchdog.py`. Verificar con `i2cdetect -y 1` si aparece `0x18` además de `0x10`.
