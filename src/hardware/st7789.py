@@ -4,6 +4,7 @@ import time
 from typing import Optional
 
 import numpy as np
+import pigpio
 import RPi.GPIO as GPIO
 from PIL import Image, ImageDraw
 
@@ -47,9 +48,11 @@ class ST7789Display:
 
         GPIO.setup(self.dc_pin, GPIO.OUT, initial=GPIO.HIGH)
         GPIO.setup(self.rst_pin, GPIO.OUT, initial=GPIO.HIGH)
-        GPIO.setup(self.bl_pin, GPIO.OUT, initial=GPIO.HIGH)
-        self._pwm = GPIO.PWM(self.bl_pin, 200)
-        self._pwm.start(100)
+        self._pi = pigpio.pi()
+        if not self._pi.connected:
+            raise RuntimeError("pigpio daemon no responde — ejecuta: sudo pigpiod")
+        # Hardware PWM en GPIO18 (PWM0). duty 0-1_000_000 (invertido: 0=máx brillo)
+        self._pi.hardware_PWM(self.bl_pin, 200, 0)
         self._first_frame_ok = False
 
         self.framebuffer = Image.new("RGB", (self.WIDTH, self.HEIGHT), (0, 0, 0))
@@ -92,9 +95,7 @@ class ST7789Display:
         raise RuntimeError("[ST7789] init failed after retries")
 
     def _init_display(self) -> None:
-        # BUG SUTIL: `bl_pin` ya fue inicializado como PWM en __init__.
-        # Llamar a GPIO.output() en un pin bajo control PWM puede apagarlo silenciosamente o crashear RPi.GPIO.
-        self._pwm.ChangeDutyCycle(100)
+        self._pi.hardware_PWM(self.bl_pin, 200, 0)
 
         GPIO.output(self.rst_pin, GPIO.HIGH); time.sleep(0.02)
         GPIO.output(self.rst_pin, GPIO.LOW); time.sleep(0.12)
@@ -142,19 +143,20 @@ class ST7789Display:
 
         if not self._first_frame_ok:
             self._first_frame_ok = True
-            self._pwm.ChangeDutyCycle(20)
+            self._pi.hardware_PWM(self.bl_pin, 200, 200_000)  # 20% duty = 80% brillo
 
     def clear(self, color=(0, 0, 0)):
         self.framebuffer = Image.new("RGB", (self.WIDTH, self.HEIGHT), color)
         self.draw = ImageDraw.Draw(self.framebuffer)
 
     def set_brightness(self, percent: int):
-        self._pwm.ChangeDutyCycle(100 - max(0, min(95, percent)))
+        duty = (100 - max(0, min(95, percent))) * 10_000
+        self._pi.hardware_PWM(self.bl_pin, 200, duty)
 
     def cleanup(self):
         try:
             self._cmd(self.CMD_DISPOFF, init_phase=True)
             self._cmd(self.CMD_SLPIN, init_phase=True)
         finally:
-            self._pwm.ChangeDutyCycle(100)
-            self._pwm.stop()
+            self._pi.hardware_PWM(self.bl_pin, 200, 1_000_000)
+            self._pi.stop()

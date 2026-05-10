@@ -35,9 +35,9 @@ Para dejar el sistema tal cual está ahora en una Raspberry Pi nueva:
 | 26 | RST GC9A01 | OUT | GC9A01 | Bajo |
 | 22 | DC ST7789 | OUT | ST7789 | Bajo |
 | 27 | RST ST7789 | OUT | ST7789 | Medio (timing reset) |
-| 23 | BL ST7789 | OUT/PWM | ST7789 | Medio (encender solo tras init) |
+| **18** | BL ST7789 (hw PWM0) | OUT/PWM | ST7789 | Medio — hardware PWM via pigpio |
 | 5,6,13 | Encoder | IN | UI | Bajo |
-| 18,19,21 | I2S MAX98357A | ALT | Audio | Alto si se cambian overlays |
+| 19,21 | I2S (libres) | — | Antes MAX98357A, ahora sin uso | — |
 | 2,3 | I2C SDA/SCL | ALT | UPS futuro | Reservados, no reutilizar |
 
 ## Configuración recomendada de boot
@@ -45,8 +45,8 @@ Usar en `/boot/firmware/config.txt` (o `/boot/config.txt` según distro):
 - `dtparam=spi=on`
 - `dtoverlay=spi0-2cs`
 - `dtparam=i2c_arm=on`
-- `dtoverlay=max98357a`
 - `dtoverlay=watchdog=on`
+- ~~`dtoverlay=max98357a`~~ — eliminado (audio I2S MAX98357A retirado del montaje)
 
 ## Configuración app (extracto)
 `config/config.json`:
@@ -98,6 +98,6 @@ sudo systemctl restart reloj.service
 - Aparecen logs `[ST7789] init OK` y `[GC9A01] init OK` (en ese orden).
 - ST7789 sale de blanco y pinta primer frame.
 - Encoder responde.
-- Audio I2S sigue operativo.
+- Audio desactivado (MAX98357A eliminado; pendiente tarjeta USB).
 - Si no hay red, reloj/UI arrancan igualmente.
 - Si UPS no está conectado, app continúa sin error fatal.

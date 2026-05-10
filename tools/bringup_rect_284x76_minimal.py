@@ -10,8 +10,8 @@ def main():
     CS_PIN = 16
     DC_PIN = 22
     RST_PIN = 27
-    BL_PIN = 23
-    
+    BL_PIN = 18  # GPIO18 = hardware PWM0 (movido desde GPIO23 el 2026-05-10)
+
     print(f"[MINIMAL] Pines configurados: CS={CS_PIN}, DC={DC_PIN}, RST={RST_PIN}, BL={BL_PIN}")
     
     GPIO.setmode(GPIO.BCM)
@@ -21,9 +21,9 @@ def main():
     GPIO.setup(DC_PIN, GPIO.OUT, initial=GPIO.HIGH)
     GPIO.setup(RST_PIN, GPIO.OUT, initial=GPIO.HIGH)
     
-    # Backlight ON (Active LOW)
+    # Backlight ON via GPIO directo (sin PWM — solo para diagnóstico mínimo)
     GPIO.setup(BL_PIN, GPIO.OUT, initial=GPIO.LOW)
-    print("[MINIMAL] Backlight encendido (GPIO23 LOW)")
+    print("[MINIMAL] Backlight encendido (GPIO18 LOW — hardware PWM0)")
     
     # SPI
     spi = spidev.SpiDev()

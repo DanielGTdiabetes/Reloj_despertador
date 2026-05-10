@@ -53,7 +53,11 @@ Config:
 | CS | **GPIO16** | **36** | GPIO normal, NO CE hardware |
 | DC | GPIO22 | 15 | Data/command |
 | RST | GPIO27 | 13 | Reset |
-| BL | GPIO23 | 16 | Backlight activo LOW |
+| BL | **GPIO18** | **12** | Backlight — hardware PWM0 (pigpio) |
+
+> ⚠️ **Cambio 2026-05-10:** BL movido de GPIO23 (pin 16) a **GPIO18 (pin 12)**.  
+> GPIO18 es hardware PWM0, elimina el parpadeo del software PWM anterior.  
+> El driver usa `pigpio.hardware_PWM()` en lugar de `RPi.GPIO.PWM()`.
 
 Config:
 
@@ -64,7 +68,7 @@ Config:
   "cs_pin": 16,
   "dc_pin": 22,
   "rst_pin": 27,
-  "bl_pin": 23,
+  "bl_pin": 18,
   "col_offset": 18,
   "row_offset": 82
 }
@@ -86,7 +90,7 @@ Parametros criticos del driver:
 | Inversión | INVOFF (0x20) |
 | col_offset | 18 |
 | row_offset | 82 |
-| Backlight | Activo LOW |
+| Backlight | GPIO18 — hardware PWM0 via pigpio |
 
 ## Encoder Rotatorio
 
@@ -101,16 +105,20 @@ Parametros criticos del driver:
 Nota: el driver usa polling. No usa `GPIO.add_event_detect`, porque ese metodo
 fallaba bajo systemd en esta instalacion.
 
-## MAX98357A - Audio I2S
+## Audio — MAX98357A (ELIMINADO)
 
-| Pin modulo | GPIO | Pin fisico | Senal |
-|---|---:|---:|---|
-| VIN | - | 2 o 4 | 5V |
-| GND | - | 14 | GND |
-| BCLK | GPIO18 | 12 | PCM_CLK |
-| LRC | GPIO19 | 35 | PCM_FS |
-| DIN | GPIO21 | 40 | PCM_DOUT |
-| SD | - | sin conectar | Ganancia maxima |
+> ❌ **El amplificador I2S MAX98357A ha sido eliminado del montaje (2026-05-10).**  
+> Causaba conflicto de hardware que dejaba la pantalla rectangular en blanco al arrancar.  
+> **Sustitución planificada:** tarjeta de sonido USB (pendrive con jack 3.5mm) vía cable OTG + altavoz 3W.  
+> Audio desactivado en `config.json` (`"enabled": false`).
+
+**Pines I2S que quedan libres** (antes ocupados por MAX98357A):
+
+| GPIO | Pin físico | Señal I2S anterior | Estado |
+|---|---:|---|---|
+| GPIO18 | 12 | PCM_CLK | ✅ Reasignado → BL ST7789 (hardware PWM0) |
+| GPIO19 | 35 | PCM_FS | 🔓 Libre |
+| GPIO21 | 40 | PCM_DOUT | 🔓 Libre |
 
 ## DFR0528 UPS HAT
 
@@ -138,8 +146,6 @@ Estado correcto:
 dtparam=spi=on
 dtoverlay=spi0-2cs
 dtparam=i2c_arm=on
-dtparam=i2s=on
-dtoverlay=max98357a
 camera_auto_detect=0
 display_auto_detect=0
 ```
@@ -148,4 +154,5 @@ Notas:
 - `dtoverlay=spi0-2cs` crea `/dev/spidev0.0` y `/dev/spidev0.1`.
 - `dtparam=spi=on` también activa SPI0; `spi0-2cs` asegura que ambos CE existan.
 - NO usar `dtoverlay=spi0-1cs` — solo crea `/dev/spidev0.0`, la ST7789 necesita `/dev/spidev0.1`.
-- NO usar `dtoverlay=spi1-3cs` — GPIO21 en conflicto con PCM_DOUT del MAX98357A.
+- `dtparam=i2s=on` y `dtoverlay=max98357a` **eliminados** — ya no hay audio I2S.
+- El backlight (GPIO18) requiere que `pigpiod` esté corriendo: `sudo systemctl enable pigpiod`.
