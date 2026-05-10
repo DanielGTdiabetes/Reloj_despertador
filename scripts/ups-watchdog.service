@@ -8,8 +8,8 @@ Before=reloj.service
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/home/pi/Reloj_despertador
-ExecStart=/usr/bin/python3 /home/pi/Reloj_despertador/scripts/ups_watchdog.py
+WorkingDirectory=/home/dani/reloj_despertador
+ExecStart=/usr/bin/python3 /home/dani/reloj_despertador/scripts/ups_watchdog.py
 # TimeoutStopSec amplio para que el script pueda señalizar shutdown al MCU
 TimeoutStopSec=15
 Restart=on-failure

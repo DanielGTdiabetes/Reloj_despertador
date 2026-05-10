@@ -15,7 +15,7 @@ class RotaryEncoder:
             "rotate_ccw": [],
             "button_press": [],
             "button_long_press": [],
-            "button_power_press": [],   # ≥ 5s → apagado
+            "button_power_press": [],
         }
         
         GPIO.setup(self.clk_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
@@ -93,7 +93,7 @@ class RotaryEncoder:
                     if pressed_at is not None and not long_fired and not power_fired:
                         self._emit("button_press")
                     pressed_at = None
-
+            
             if pressed_at is not None:
                 held = now - pressed_at
                 if not long_fired and held >= 1.1:

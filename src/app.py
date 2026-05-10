@@ -8,7 +8,6 @@ import time
 import traceback
 
 from PIL import Image
-
 import RPi.GPIO as GPIO
 
 from config_loader import load_config, save_config
@@ -24,14 +23,6 @@ from services.weather import WeatherService
 from ui.rect_ui import RectUIScreen
 from ui.round_home import RoundHomeScreen
 from runtime_flags import RuntimeFlags
-
-
-# Posiciones de pixel shift: recorre un cuadrado de 2px (invisible al ojo)
-_SHIFT_POSITIONS = [(0,0),(1,0),(2,0),(2,1),(2,2),(1,2),(0,2),(0,1)]
-SHIFT_INTERVAL   = 180   # segundos entre cada paso de shift
-DIM_TIMEOUT      = 180   # segundos de inactividad antes de bajar brillo
-DIM_BRIGHTNESS      = 15    # % de brillo en modo dim (redonda, hardware PWM)
-DIM_BRIGHTNESS_RECT = 45    # % de brillo en modo dim para la rect (software, backlight siempre encendido)
 
 
 class State:
@@ -62,6 +53,10 @@ WIFI_CHARS = (
     list("0123456789") +
     list(" !@#$%&*()-_+=.,:;?/\"\\'")
 )
+
+DIM_TIMEOUT = 180
+DIM_BRIGHTNESS_ROUND = 15
+DIM_BRIGHTNESS_RECT = 45
 
 
 class AlarmClockApp:
@@ -95,6 +90,9 @@ class AlarmClockApp:
         self.brightness_rect = int(ui_cfg.get("brightness_rect", 80))
         self.brightness_target = "round"
         self.brightness_editing = False
+        self._last_interaction = time.time()
+        self._dimmed = False
+        self._standby_needs_black = False
 
         self.wifi_networks = []
         self.wifi_index = 0
@@ -102,19 +100,8 @@ class AlarmClockApp:
         self.wifi_ssid = ""
         self.wifi_password = ""
         self.wifi_char_idx = 0
-
-        # Pixel shift anti burn-in
-        self._shift_idx  = 0
-        self._last_shift = time.time()
-
-        # WiFi status (caché para no llamar subprocess cada frame)
-        self._connected_ssid   = ""
-        self._wifi_check_time  = 0.0
-
-        # Auto-dim por inactividad
-        self._last_interaction = time.time()
-        self._dimmed = False
-        self._standby_needs_black = False
+        self._connected_ssid = ""
+        self._wifi_check_time = 0.0
 
         self.weather_updating = False
         postal = self.config.get("location", {}).get("postal_code", "00000")
@@ -311,6 +298,25 @@ class AlarmClockApp:
     def _on_power_press(self):
         self._emit_event("encoder_power_press")
 
+    def _handle_power_press(self) -> None:
+        if self.state == State.STANDBY:
+            self._standby_exit()
+        else:
+            self._standby_enter()
+
+    def _standby_enter(self) -> None:
+        print("[Standby] entrando", flush=True)
+        self.state = State.STANDBY
+        self._dimmed = False
+        self._standby_needs_black = True
+
+    def _standby_exit(self) -> None:
+        print("[Standby] saliendo", flush=True)
+        self.state = State.CLOCK
+        self._dimmed = False
+        self._last_interaction = time.time()
+        self._apply_brightness()
+
     def _handle_press(self) -> None:
         if self.state == State.CLOCK:
             self.state = State.MENU
@@ -325,11 +331,12 @@ class AlarmClockApp:
             if self.wifi_networks:
                 self.wifi_ssid = self.wifi_networks[self.wifi_index].get("ssid", "")
                 if self._nmcli_has_profile(self.wifi_ssid):
-                    # Red conocida por nmcli: conectar sin pedir contraseña
                     self.status = "Conectando WiFi"
                     self.state = State.CLOCK
                     threading.Thread(
-                        target=self._wifi_connect_known, args=(self.wifi_ssid,), daemon=True
+                        target=self._wifi_connect_known,
+                        args=(self.wifi_ssid,),
+                        daemon=True,
                     ).start()
                 else:
                     self.wifi_password = ""
@@ -372,24 +379,6 @@ class AlarmClockApp:
             self._snooze_alarm()
         else:
             self.state = State.CLOCK
-
-    def _handle_power_press(self) -> None:
-        if self.state == State.STANDBY:
-            self._standby_exit()
-        else:
-            self._standby_enter()
-
-    def _standby_enter(self) -> None:
-        print("[Standby] entrando", flush=True)
-        self.state = State.STANDBY
-        self._standby_needs_black = True  # el loop lo enviará en el siguiente tick
-
-    def _standby_exit(self) -> None:
-        print("[Standby] saliendo", flush=True)
-        self._dimmed = False
-        self._last_interaction = time.time()
-        self.state = State.CLOCK
-        self.displays.set_brightness(round_percent=self.brightness_round, rect_percent=self.brightness_rect)
 
     def _select_menu(self):
         key = MENU_ITEMS[self.menu_index][0]
@@ -448,6 +437,24 @@ class AlarmClockApp:
         self._apply_brightness()
         self.status = "Brillo guardado"
 
+    def _mark_interaction(self) -> None:
+        self._last_interaction = time.time()
+        if self._dimmed:
+            self._dimmed = False
+            self._apply_brightness()
+
+    def _update_auto_dim(self) -> None:
+        if self._dimmed or self.state in (State.ALARM_RINGING, State.STANDBY):
+            return
+        if time.time() - self._last_interaction < DIM_TIMEOUT:
+            return
+        if self.displays:
+            self._dimmed = True
+            self.displays.set_brightness(
+                round_percent=min(self.brightness_round, DIM_BRIGHTNESS_ROUND),
+                rect_percent=min(self.brightness_rect, DIM_BRIGHTNESS_RECT),
+            )
+
     def _start_wifi_scan(self):
         if self.wifi_scanning:
             return
@@ -459,9 +466,12 @@ class AlarmClockApp:
     def _wifi_scan_worker(self):
         networks = []
         try:
+            iwlist = "iwlist" if self._command_exists("iwlist") else "/sbin/iwlist"
             out = subprocess.check_output(
-                ["sudo", "-n", "iwlist", "wlan0", "scan"],
-                stderr=subprocess.DEVNULL, text=True, timeout=15,
+                ["sudo", "-n", iwlist, "wlan0", "scan"],
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=15,
             )
             for cell in out.split("Cell ")[1:]:
                 ssid_match = re.search(r'ESSID:"([^"]*)"', cell)
@@ -520,28 +530,47 @@ class AlarmClockApp:
             print(f"[WiFi] connect failed: {exc}")
 
     def _nmcli_has_profile(self, ssid: str) -> bool:
-        """True si nmcli tiene ya un perfil guardado para este SSID."""
-        if not self._command_exists("nmcli"):
+        if not ssid or not self._command_exists("nmcli"):
             return False
         try:
             out = subprocess.check_output(
                 ["nmcli", "-t", "-f", "NAME", "connection", "show"],
-                text=True, timeout=3, stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=3,
+                stderr=subprocess.DEVNULL,
             )
             return ssid in out.splitlines()
         except Exception:
             return False
 
     def _wifi_connect_known(self, ssid: str) -> None:
-        """Conecta a una red ya guardada en nmcli sin necesidad de contraseña."""
         try:
             subprocess.check_call(
-                ["nmcli", "dev", "wifi", "connect", ssid], timeout=25
+                ["nmcli", "dev", "wifi", "connect", ssid],
+                timeout=25,
             )
             self.status = "WiFi conectado"
         except Exception as exc:
             self.status = "WiFi fallo"
             print(f"[WiFi] connect known failed: {exc}")
+
+    def _get_connected_ssid(self) -> str:
+        now = time.time()
+        if now - self._wifi_check_time < 30:
+            return self._connected_ssid
+
+        self._wifi_check_time = now
+        try:
+            out = subprocess.check_output(
+                ["iwgetid", "-r"],
+                text=True,
+                timeout=2,
+                stderr=subprocess.DEVNULL,
+            )
+            self._connected_ssid = out.strip()
+        except Exception:
+            self._connected_ssid = ""
+        return self._connected_ssid
 
     def _command_exists(self, name):
         return subprocess.call(["which", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
@@ -630,36 +659,6 @@ class AlarmClockApp:
         self.state = State.CLOCK
         self.status = "Pospuesta"
 
-    def _pixel_shift(self, img: Image.Image, dx: int, dy: int) -> Image.Image:
-        if dx == 0 and dy == 0:
-            return img
-        w, h = img.size
-        out = Image.new("RGB", (w, h), (0, 0, 0))
-        out.paste(img, (dx, dy))
-        return out
-
-    def _software_dim(self, img: Image.Image, factor: float) -> Image.Image:
-        """Oscurece la imagen multiplicando RGB por factor (0.0–1.0)."""
-        import numpy as np
-        arr = np.asarray(img, dtype=np.float32)
-        arr = (arr * factor).clip(0, 255).astype(np.uint8)
-        return Image.fromarray(arr)
-
-    def _get_connected_ssid(self) -> str:
-        """Devuelve el SSID al que está conectado wlan0. Refresca cada 30 s."""
-        now = time.time()
-        if now - self._wifi_check_time >= 30:
-            self._wifi_check_time = now
-            try:
-                result = subprocess.check_output(
-                    ["iwgetid", "-r"], text=True, timeout=2,
-                    stderr=subprocess.DEVNULL,
-                )
-                self._connected_ssid = result.strip()
-            except Exception:
-                self._connected_ssid = ""
-        return self._connected_ssid
-
     def _render(self):
         now = self.clock.now()
         if self.state == State.ALARM_RINGING:
@@ -674,19 +673,6 @@ class AlarmClockApp:
         rect_img = self._render_rect(now, wifi_ssid=wifi_ssid)
 
         if self.displays:
-            dx, dy = _SHIFT_POSITIONS[self._shift_idx]
-            dim_factor = DIM_BRIGHTNESS / 100.0 if self._dimmed else 1.0
-
-            if round_img is not None:
-                round_img = self._pixel_shift(round_img, dx, dy)
-                if dim_factor < 1.0:
-                    round_img = self._software_dim(round_img, dim_factor)
-            if rect_img is not None:
-                rect_img = self._pixel_shift(rect_img, dx, dy)
-                rect_dim = DIM_BRIGHTNESS_RECT / 100.0 if self._dimmed else 1.0
-                rect_factor = (self.brightness_rect / 100.0) * rect_dim
-                if rect_factor < 1.0:
-                    rect_img = self._software_dim(rect_img, rect_factor)
             self.displays.submit(round_image=round_img, rect_image=rect_img)
 
     def _render_round(self, now, wifi_ssid=""):
@@ -818,23 +804,13 @@ class AlarmClockApp:
             except queue.Empty:
                 return
 
-            # Registrar interacción para auto-dim
-            if kind in ("encoder_rotate", "encoder_press", "encoder_long_press", "encoder_power_press"):
-                self._last_interaction = time.time()
-                if self._dimmed and self.state != State.STANDBY:
-                    self._dimmed = False
-                    self.displays.set_brightness(
-                        round_percent=self.brightness_round,
-                        rect_percent=self.brightness_rect,
-                    )
-
-            # Cualquier interacción saca del standby
             if self.state == State.STANDBY:
-                if kind in ("encoder_rotate", "encoder_press", "encoder_long_press"):
+                if kind in ("encoder_rotate", "encoder_press", "encoder_long_press", "encoder_power_press"):
                     self._standby_exit()
-                elif kind == "encoder_power_press":
-                    self._handle_power_press()
                 continue
+
+            if kind in ("encoder_rotate", "encoder_press", "encoder_long_press"):
+                self._mark_interaction()
 
             if kind == "encoder_rotate":
                 try:
@@ -860,28 +836,14 @@ class AlarmClockApp:
                 self._render()
                 self.tick += 1
                 last_render = now
-
-            # Standby: mandar frame negro después de que el render se ha parado
             if self._standby_needs_black and self.displays:
                 self._standby_needs_black = False
-                black_round = Image.new("RGB", (240, 240), (0, 0, 0))
-                black_rect  = Image.new("RGB", (284, 76),  (0, 0, 0))
-                self.displays.submit(round_image=black_round, rect_image=black_rect)
+                self.displays.submit(
+                    round_image=Image.new("RGB", (240, 240), (0, 0, 0)),
+                    rect_image=Image.new("RGB", (284, 76), (0, 0, 0)),
+                )
                 self.displays.set_brightness(round_percent=0, rect_percent=0)
-
-            # Pixel shift: avanzar posición cada SHIFT_INTERVAL segundos
-            if now - self._last_shift >= SHIFT_INTERVAL:
-                self._shift_idx = (self._shift_idx + 1) % len(_SHIFT_POSITIONS)
-                self._last_shift = now
-
-            # Auto-dim: bajar brillo tras inactividad
-            if not self._dimmed and self.state not in (State.STANDBY, State.ALARM_RINGING):
-                if now - self._last_interaction >= DIM_TIMEOUT and self.displays:
-                    self._dimmed = True
-                    # Round: bajar a DIM_BRIGHTNESS% via hardware PWM
-                    # Rect: mantener BL encendido — el dimming de píxeles ya oscurece el contenido
-                    self.displays.set_brightness(round_percent=DIM_BRIGHTNESS, rect_percent=self.brightness_rect)
-
+            self._update_auto_dim()
             if now - last_weather_check >= 15.0:
                 if not self.flags.disable_weather and self.weather.should_update():
                     threading.Thread(target=self._refresh_weather, daemon=True).start()

@@ -39,8 +39,9 @@ SHUTDOWN_DELAY     = 10    # segundos de margen antes de ejecutar shutdown
 #   • En batería: < 4050 mV  (típico: 3990–4040 mV)
 # Banda de histéresis 4050–4100 mV: mantiene estado anterior para evitar
 # oscilaciones en el límite. Detección en la primera lectura (~30 s).
-VOLT_MAINS_MV = 4100   # por encima → en red
-VOLT_BATT_MV  = 4050   # por debajo → en batería
+VOLT_MAINS_MV = 4130   # por encima -> en red/cargando
+VOLT_BATT_MV  = 4100   # por debajo -> en bateria
+SOC_TREND_EPS = 0.03   # cambio minimo de SOC para considerar tendencia real
 
 
 class BatteryService:
@@ -89,6 +90,7 @@ class BatteryService:
         self._volts: float | None = None   # mV
         self._level: str          = "unknown"
         self._on_mains: bool = True   # asumir red en arranque
+        self._last_soc: float | None = None
 
         self._hat     = None
         self._thread: threading.Thread | None = None
@@ -188,7 +190,12 @@ class BatteryService:
                 volts = self._hat.read_voltage_mv()
                 level = self._classify(soc)
 
-                on_mains = self._update_mains_state(volts)
+                try:
+                    hardware_mains = self._hat.is_on_mains()
+                except Exception:
+                    hardware_mains = None
+
+                on_mains = self._update_mains_state(soc, volts, hardware_mains)
                 with self._lock:
                     self._soc      = soc
                     self._volts    = volts
@@ -218,18 +225,32 @@ class BatteryService:
                 time.sleep(5.0)
                 elapsed += 5.0
 
-    def _update_mains_state(self, volts: float) -> bool:
-        """Detecta alimentación externa por umbral de voltaje.
+    def _update_mains_state(self, soc: float, volts: float, hardware_mains: bool | None = None) -> bool:
+        """Detecta alimentacion externa combinando SOC, voltaje y bit del HAT.
 
-        En red el voltaje es >4100 mV (float-charging). En batería cae a
-        <4050 mV. La banda 4050–4100 mV mantiene el estado anterior para
-        evitar oscilaciones. Detección en la primera lectura (~30 s).
+        La senal mas fiable en este montaje es la tendencia del SOC: si baja,
+        esta consumiendo bateria; si sube, esta cargando. Cuando el SOC esta
+        clavado al 100%, usamos voltaje y el bit POWAM del HAT como apoyo.
         """
+        trend_mains = None
+        if self._last_soc is not None:
+            delta = soc - self._last_soc
+            if delta <= -SOC_TREND_EPS:
+                trend_mains = False
+            elif delta >= SOC_TREND_EPS:
+                trend_mains = True
+        self._last_soc = soc
+        if trend_mains is not None:
+            self._on_mains = trend_mains
+            return self._on_mains
+
         if volts >= VOLT_MAINS_MV:
             self._on_mains = True
         elif volts <= VOLT_BATT_MV:
             self._on_mains = False
-        # else: banda de histéresis, sin cambio
+        elif hardware_mains is not None:
+            self._on_mains = hardware_mains
+
         return self._on_mains
 
     def _classify(self, soc: float) -> str:

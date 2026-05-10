@@ -52,7 +52,7 @@
         "sw_pin": 13
     },
     "audio": {
-        "enabled": true,
+        "enabled": false,
         "device": "max98357a",
         "alarm_sounds": [
             "src/assets/sounds/alarm1.wav",
@@ -83,6 +83,7 @@
         "i2c_bus": 1,
         "i2c_address": 16,
         "warning_threshold": 20,
+        "critical_threshold": 15,
         "shutdown_threshold": 12
     }
 }

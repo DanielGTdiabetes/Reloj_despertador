@@ -119,24 +119,27 @@ class RoundHomeScreen:
                 draw.ellipse([x - r, y - r, x + r, y + r], fill=color)
 
     def _draw_wifi_indicator(self, draw, connected: bool = True) -> None:
-        """Icono WiFi — posición simétrica al icono de alarma (lado derecho).
-        Conectado: 3 arcos + punto en cyan. Sin WiFi: icono atenuado + X roja.
-        """
-        col = CYAN if connected else (45, 50, 65)
-        bx, by = 177, 145
-        cx, cy = bx, by + 7
-
-        r_dot = 2
-        draw.ellipse([cx - r_dot, cy - r_dot, cx + r_dot, cy + r_dot], fill=col)
-
-        for radius in [5, 8, 11]:
-            box = [cx - radius, cy - radius, cx + radius, cy + radius]
-            draw.arc(box, start=225, end=315, fill=col, width=2)
-
+        bx, by = 177, 154
+        col = CYAN if connected else (55, 60, 75)
+        for radius in (8, 14, 20):
+            draw.arc(
+                [bx - radius, by - radius, bx + radius, by + radius],
+                215,
+                325,
+                fill=col,
+                width=2,
+            )
+        draw.ellipse([bx - 2, by + 8, bx + 2, by + 12], fill=col)
         if not connected:
-            xc, yc, xs = cx + 7, cy - 9, 4
-            draw.line([xc - xs, yc - xs, xc + xs, yc + xs], fill=(220, 50, 50), width=2)
-            draw.line([xc + xs, yc - xs, xc - xs, yc + xs], fill=(220, 50, 50), width=2)
+            draw.line([bx - 8, by + 17, bx + 8, by + 1], fill=(180, 45, 45), width=2)
+
+    def _draw_status_indicator(self, img, draw, battery, wifi_ssid: str) -> None:
+        level = battery.get("level", "ok") if battery else "ok"
+        on_mains = battery.get("on_mains", True) if battery else True
+        if battery and (level in ("warning", "critical", "shutdown") or not on_mains):
+            self._draw_battery_indicator(img, battery)
+            return
+        self._draw_wifi_indicator(draw, connected=bool(wifi_ssid))
 
     def _draw_battery_indicator(self, img, battery_state) -> None:
         """Indicador de batería — lado derecho, simétrico al icono de alarma.
@@ -233,22 +236,8 @@ class RoundHomeScreen:
         # Indicador de Alarma LATERAL (izquierda)
         self._draw_sidebar_alarm(img, alarm)
 
-<<<<<<< HEAD
-        # Indicador lateral derecho: batería si nivel bajo (warning/critical/shutdown),
-        # WiFi en cualquier otro caso (ok, desconocido, o HAT no presente).
-        batt_level = battery.get("level", "ok") if battery else "ok"
-        if batt_level in ("warning", "critical", "shutdown"):
-            self._draw_battery_indicator(img, battery)
-        else:
-            self._draw_wifi_indicator(draw, connected=bool(wifi_ssid))
-=======
-        # Indicador lateral derecho: batería si hay alerta, WiFi si todo está bien
-        on_mains = battery.get("on_mains", True) if battery else True
-        if on_mains:
-            self._draw_wifi_indicator(draw, connected=bool(wifi_ssid))
-        else:
-            self._draw_battery_indicator(img, battery)
->>>>>>> 6abc113 (feat: indicador lateral derecho WiFi/batería con detección por voltaje)
+        # Indicador de Batería LATERAL (derecha, simétrico a la alarma)
+        self._draw_status_indicator(img, draw, battery, wifi_ssid)
 
         # Desc y Temp
         _text_center(draw, 178, desc[:22], F.small, DIM_WHITE)
@@ -281,23 +270,8 @@ class RoundHomeScreen:
         # Indicador de Alarma LATERAL (izquierda)
         self._draw_sidebar_alarm(img, alarm)
 
-<<<<<<< HEAD
-        # Indicador lateral derecho: batería si nivel bajo (warning/critical/shutdown),
-        # WiFi en cualquier otro caso.
-        draw_night = ImageDraw.Draw(img)
-        batt_level = battery.get("level", "ok") if battery else "ok"
-        if batt_level in ("warning", "critical", "shutdown"):
-            self._draw_battery_indicator(img, battery)
-        else:
-            self._draw_wifi_indicator(draw_night, connected=bool(wifi_ssid))
-=======
-        # Indicador lateral derecho: batería si hay alerta, WiFi si todo está bien
-        on_mains = battery.get("on_mains", True) if battery else True
-        if on_mains:
-            self._draw_wifi_indicator(draw, connected=True)
-        else:
-            self._draw_battery_indicator(img, battery)
->>>>>>> 6abc113 (feat: indicador lateral derecho WiFi/batería con detección por voltaje)
+        # Indicador de batería (modo noche — esquina derecha)
+        self._draw_status_indicator(img, draw, battery, wifi_ssid)
 
         return img
 

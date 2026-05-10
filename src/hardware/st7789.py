@@ -28,8 +28,8 @@ class ST7789Display:
     CMD_MADCTL = 0x36
     CMD_COLMOD = 0x3A
 
-    def __init__(self, spi_port=0, spi_device=1, cs_pin=16, dc_pin=22, rst_pin=27, bl_pin=23,
-                 col_offset=18, row_offset=82,
+    def __init__(self, spi_port=0, spi_device=1, cs_pin=16, dc_pin=22, rst_pin=27, bl_pin=23, 
+                 col_offset=18, row_offset=82, 
                  init_extended=False, madctl_val=0xA0, colmod_val=0x05):
         self.spi_port = spi_port
         self.spi_device = spi_device
@@ -47,10 +47,9 @@ class ST7789Display:
 
         GPIO.setup(self.dc_pin, GPIO.OUT, initial=GPIO.HIGH)
         GPIO.setup(self.rst_pin, GPIO.OUT, initial=GPIO.HIGH)
-        # BL pin: control directo GPIO sin PWM para evitar parpadeo en Pi Zero W.
-        # El pin es activo-bajo: LOW = encendido, HIGH = apagado.
         GPIO.setup(self.bl_pin, GPIO.OUT, initial=GPIO.HIGH)
-        self._bl_on = False
+        self._pwm = GPIO.PWM(self.bl_pin, 200)
+        self._pwm.start(100)
         self._first_frame_ok = False
 
         self.framebuffer = Image.new("RGB", (self.WIDTH, self.HEIGHT), (0, 0, 0))
@@ -70,7 +69,9 @@ class ST7789Display:
                     payload = [data]
                 else:
                     payload = list(data)
-
+                
+                # spidev.writebytes2 es más seguro y predecible si SIEMPRE se le pasan bytes.
+                # Pasar listas (list of ints) puede fallar silenciosamente en algunas versiones de kernel.
                 spi.writebytes2(bytes(payload))
 
     def _cmd(self, cmd: int, *, init_phase: bool = False) -> None:
@@ -91,13 +92,17 @@ class ST7789Display:
         raise RuntimeError("[ST7789] init failed after retries")
 
     def _init_display(self) -> None:
+        # BUG SUTIL: `bl_pin` ya fue inicializado como PWM en __init__.
+        # Llamar a GPIO.output() en un pin bajo control PWM puede apagarlo silenciosamente o crashear RPi.GPIO.
+        self._pwm.ChangeDutyCycle(100)
+
         GPIO.output(self.rst_pin, GPIO.HIGH); time.sleep(0.02)
         GPIO.output(self.rst_pin, GPIO.LOW); time.sleep(0.12)
         GPIO.output(self.rst_pin, GPIO.HIGH); time.sleep(0.2)
-
+        
         self._cmd(self.CMD_SWRESET, init_phase=True); time.sleep(0.18)
         self._cmd(self.CMD_SLPOUT, init_phase=True); time.sleep(0.15)
-
+        
         if self.init_extended:
             self._cd(0xB2, [0x0C, 0x0C, 0x00, 0x33, 0x33], init_phase=True) # PORCTRL
             self._cd(0xB7, [0x35], init_phase=True) # GCTRL
@@ -137,21 +142,19 @@ class ST7789Display:
 
         if not self._first_frame_ok:
             self._first_frame_ok = True
-            if self._bl_on:
-                GPIO.output(self.bl_pin, GPIO.LOW)
+            self._pwm.ChangeDutyCycle(20)
 
     def clear(self, color=(0, 0, 0)):
         self.framebuffer = Image.new("RGB", (self.WIDTH, self.HEIGHT), color)
         self.draw = ImageDraw.Draw(self.framebuffer)
 
     def set_brightness(self, percent: int):
-        self._bl_on = percent > 0
-        if self._first_frame_ok:
-            GPIO.output(self.bl_pin, GPIO.LOW if self._bl_on else GPIO.HIGH)
+        self._pwm.ChangeDutyCycle(100 - max(0, min(95, percent)))
 
     def cleanup(self):
         try:
             self._cmd(self.CMD_DISPOFF, init_phase=True)
             self._cmd(self.CMD_SLPIN, init_phase=True)
         finally:
-            GPIO.output(self.bl_pin, GPIO.HIGH)
+            self._pwm.ChangeDutyCycle(100)
+            self._pwm.stop()

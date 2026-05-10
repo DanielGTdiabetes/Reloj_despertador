@@ -3,9 +3,6 @@ Lunar Phase Service - Calculates current moon phase
 """
 
 import ephem
-import datetime
-import math
-
 class LunarService:
     """Calculates moon phase and illumination"""
 
@@ -27,10 +24,15 @@ class LunarService:
         self.moon = ephem.Moon()
 
     def get_phase(self):
-        self.observer.date = ephem.now()
+        now = ephem.now()
+        self.observer.date = now
         self.moon.compute(self.observer)
 
-        phase = self.moon.phase / 100.0
+        prev_new = ephem.previous_new_moon(now)
+        next_new = ephem.next_new_moon(now)
+        cycle = float(next_new - prev_new)
+        age = float(now - prev_new)
+        phase = (age / cycle) % 1.0
         illumination = self.moon.phase
 
         phase_index = int(phase * 8 + 0.5) % 8
