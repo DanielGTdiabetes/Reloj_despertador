@@ -56,7 +56,7 @@
         "device": "KT USB Audio",
         "alarm_sounds": [
             "src/assets/sounds/alarm1.wav",
-            "src/assets/sounds/beep.wav"
+            "src/assets/sounds/alarm2.wav"
         ]
     },
     "alarm": {
