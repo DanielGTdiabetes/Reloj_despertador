@@ -18,7 +18,22 @@ class I2SAudio:
         self._volume = 80
 
     def _resolve_alsa_device(self, name):
-        """Return (aplay -D spec, card_num), falling back to plughw:0,0 if not found."""
+        """Return (aplay -D spec, card_num).
+
+        Prefers the 'ugreen' named device from ~/.asoundrc (stereo→mono mix for
+        single-speaker setups). Falls back to plughw:{card},0 if not found.
+        """
+        try:
+            listed = subprocess.check_output(["aplay", "-L"], stderr=subprocess.DEVNULL, text=True)
+            if "ugreen" in listed.lower():
+                # Named device from .asoundrc handles mono mix
+                out = subprocess.check_output(["aplay", "-l"], stderr=subprocess.DEVNULL, text=True)
+                for line in out.splitlines():
+                    if name.lower() in line.lower() and line.startswith("card"):
+                        card_num = line.split(":")[0].replace("card", "").strip()
+                        return "ugreen", card_num
+        except Exception:
+            pass
         try:
             out = subprocess.check_output(["aplay", "-l"], stderr=subprocess.DEVNULL, text=True)
             for line in out.splitlines():
@@ -31,8 +46,8 @@ class I2SAudio:
 
     def set_volume(self, percent):
         self._volume = max(0, min(100, percent))
-        # Set volume via ALSA mixer (PCM control on the USB card)
-        for control in ("PCM", "Speaker", "Master"):
+        # KT USB Audio (ALC4030) exposes "Headphone Playback Volume"; fall back to generic names
+        for control in ("Headphone Playback Volume", "Headphone", "PCM", "Speaker", "Master"):
             try:
                 subprocess.run(
                     ["amixer", "-c", self._card_num, "sset", control, f"{self._volume}%"],

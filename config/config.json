@@ -53,10 +53,10 @@
     },
     "audio": {
         "enabled": true,
-        "device": "USB Audio",
+        "device": "KT USB Audio",
         "alarm_sounds": [
             "src/assets/sounds/alarm1.wav",
-            "src/assets/sounds/alarm2.wav"
+            "src/assets/sounds/beep.wav"
         ]
     },
     "alarm": {
