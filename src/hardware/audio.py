@@ -46,14 +46,22 @@ class I2SAudio:
 
     def set_volume(self, percent):
         self._volume = max(0, min(100, percent))
-        # KT USB Audio (ALC4030) exposes "Headphone Playback Volume"; fall back to generic names
-        for control in ("Headphone Playback Volume", "Headphone", "PCM", "Speaker", "Master"):
+        v = self._volume
+        # KT USB Audio uses a non-simple control — must use cset numid=3
+        try:
+            subprocess.run(
+                ["amixer", "-c", self._card_num, "cset", "numid=3", f"{v},{v}"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
+            )
+            return
+        except subprocess.CalledProcessError:
+            pass
+        # Fallback for other cards with simple controls
+        for control in ("PCM", "Speaker", "Master", "Headphone"):
             try:
                 subprocess.run(
-                    ["amixer", "-c", self._card_num, "sset", control, f"{self._volume}%"],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    check=True,
+                    ["amixer", "-c", self._card_num, "sset", control, f"{v}%"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
                 )
                 break
             except subprocess.CalledProcessError:

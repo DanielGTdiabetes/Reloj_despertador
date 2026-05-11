@@ -9,11 +9,8 @@ PI_PASS = "26021980"
 # regardless of which jack (L or R) it is connected to.
 ASOUNDRC = """\
 pcm.ugreen {
-    type route
+    type plug
     slave.pcm "plughw:2,0"
-    slave.channels 2
-    ttable.0.0 1.0
-    ttable.0.1 1.0
 }
 ctl.ugreen {
     type hw

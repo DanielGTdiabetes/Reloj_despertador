@@ -640,12 +640,16 @@ class AlarmClockApp:
         self.status = "Alarma"
         self._alarm_started_at = time.time()
         sounds = self.config.get("audio", {}).get("alarm_sounds", [])
+        print(f"[Alarm] trigger audio={self.audio is not None} sounds={sounds}")
         if self.audio and sounds:
             path = sounds[0]
             if not os.path.isabs(path):
                 path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", path))
+            print(f"[Alarm] playing {path} exists={os.path.exists(path)}")
             self.audio.set_volume(self.alarm.get("volume", 80))
             self.audio.play_file(path, loop=True)
+        elif not self.audio:
+            print("[Alarm] no audio device")
 
     def _stop_alarm(self):
         if self.audio:
