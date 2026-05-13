@@ -16,7 +16,7 @@ broken_encoder_version.tar.gz
 project_updated/
 project_updated_downloaded/
 
-# Scripts temporales de depuracin (opcional, pero recomendado)
+# Scripts temporales de depuracion
 debug_*.py
 test_*.py
 fix_*.py
@@ -25,6 +25,11 @@ apply_fix.py
 final_fix.py
 quick_fix.py
 temp_log.txt
+scripts/_*.py
+
+# Animaciones pre-renderizadas (archivos generados, no van a git)
+src/assets/animations/*.npy
+
 # *.png y *.txt NO ignorados — los assets y docs se commitean
 
 # IDEs

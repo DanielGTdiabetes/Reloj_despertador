@@ -214,6 +214,39 @@ class RectUIScreen:
 
         return img
 
+    def render_face_anim(self, enabled: bool) -> Image.Image:
+        """Submenú ON/OFF para la animación de cara."""
+        img  = Image.new("RGB", (W, H), BG)
+        draw = ImageDraw.Draw(img)
+
+        options = [(True, "ANIMACION ON"), (False, "ANIMACION OFF")]
+        item_w = W // 2
+
+        for slot, (val, label) in enumerate(options):
+            selected = (val == enabled)
+            x1, x2 = slot * item_w, (slot + 1) * item_w
+            if selected:
+                draw.rounded_rectangle([x1+5, 5, x2-5, H-5],
+                                       radius=12, outline=CYAN, width=2)
+                col = CYAN
+            else:
+                col = DIM_WHITE
+
+            # Punto de estado grande
+            dot_y = 24
+            dot_r = 8
+            dot_x = (x1 + x2) // 2
+            dot_col = CYAN if (val and selected) else (80, 80, 80) if not val else DIM_WHITE
+            draw.ellipse([dot_x-dot_r, dot_y-dot_r, dot_x+dot_r, dot_y+dot_r],
+                         fill=dot_col if selected else (30, 35, 45),
+                         outline=col, width=2)
+
+            bb = draw.textbbox((0, 0), label, font=F.menu_label)
+            tw = bb[2] - bb[0]
+            draw.text(((x1 + x2 - tw) // 2, 46), label, font=F.menu_label, fill=col)
+
+        return img
+
     def render_wifi_scan(self, nets, index, scanning, connected_ssid="") -> Image.Image:
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)

@@ -23,6 +23,7 @@ from services.sun import SunService
 from services.weather import WeatherService
 from ui.rect_ui import RectUIScreen
 from ui.round_home import RoundHomeScreen
+from ui.face_anim import FaceAnimator
 from runtime_flags import RuntimeFlags
 
 
@@ -37,6 +38,7 @@ class State:
     NUCLEAR_RINGING = "nuclear_ringing"
     LOCATION = "location"
     STANDBY = "standby"
+    FACE_ANIM = "face_anim"
 
 
 MENU_ITEMS = [
@@ -46,6 +48,7 @@ MENU_ITEMS = [
     ("location", "CIUDAD"),
     ("sync", "SYNC"),
     ("weather", "CLIMA"),
+    ("face_anim", "CARA"),     # Se actualizará dinámicamente a "ON/OFF"
 ]
 
 WIFI_CHARS = (
@@ -91,6 +94,8 @@ class AlarmClockApp:
         ui_cfg = self.config.get("ui", {})
         self.brightness_round = int(ui_cfg.get("brightness_round", 80))
         self.brightness_rect = int(ui_cfg.get("brightness_rect", 80))
+        self.face_anim_enabled = bool(ui_cfg.get("face_anim_enabled", True))
+        self.face_anim_selection = self.face_anim_enabled  # temporal en submenu
         self.brightness_target = "round"
         self.brightness_editing = False
         self._last_interaction = time.time()
@@ -164,6 +169,7 @@ class AlarmClockApp:
     def _init_ui(self):
         self.ui_round = RoundHomeScreen()
         self.ui_rect = RectUIScreen()
+        self.face_anim: FaceAnimator | None = None
 
     def _init_hardware(self):
         self.displays = DisplayManager(
@@ -173,6 +179,16 @@ class AlarmClockApp:
             brightness_rect=self.brightness_rect,
         )
         self.displays.init()
+
+        try:
+            self.face_anim = FaceAnimator(self.displays)
+            self.face_anim.load()
+            self.face_anim.start()
+            self.face_anim.set_active(self.state == State.CLOCK)
+        except Exception as exc:
+            print(f"[Face] animator failed to start: {exc}")
+            self.face_anim = None
+
         self.encoder = None
 
         if self.flags.disable_encoder:
@@ -289,6 +305,9 @@ class AlarmClockApp:
                 self.location_digits[self.location_digit_idx] = (self.location_digits[self.location_digit_idx] + delta) % 10
             else:
                 self.location_digit_idx = (self.location_digit_idx + delta) % 5
+        elif self.state == State.FACE_ANIM:
+            # Gira entre ON y OFF
+            self.face_anim_selection = not self.face_anim_selection
         elif self.state == State.ALARM_RINGING:
             self.ring_option = (self.ring_option + delta) % 2
 
@@ -355,6 +374,8 @@ class AlarmClockApp:
                 self.wifi_password += ch
         elif self.state == State.LOCATION:
             self.location_editing = not self.location_editing
+        elif self.state == State.FACE_ANIM:
+            self._save_face_anim()
         elif self.state == State.ALARM_RINGING:
             if self.ring_option == 0:
                 self._stop_alarm()
@@ -380,6 +401,10 @@ class AlarmClockApp:
         elif self.state == State.LOCATION:
             self.location_editing = False
             self._location_confirm()
+        elif self.state == State.FACE_ANIM:
+            # Descartar cambios y volver al reloj
+            self.face_anim_selection = self.face_anim_enabled
+            self.state = State.CLOCK
         elif self.state in (State.ALARM_RINGING, State.NUCLEAR_RINGING):
             self._stop_alarm()
         else:
@@ -414,6 +439,9 @@ class AlarmClockApp:
             else:
                 threading.Thread(target=self._refresh_weather, daemon=True).start()
             self.state = State.CLOCK
+        elif key == "face_anim":
+            self.face_anim_selection = self.face_anim_enabled
+            self.state = State.FACE_ANIM
 
     def _advance_alarm_field(self):
         if self.alarm_field == "enabled":
@@ -434,6 +462,15 @@ class AlarmClockApp:
     def _apply_brightness(self):
         if self.displays:
             self.displays.set_brightness(round_percent=self.brightness_round, rect_percent=self.brightness_rect)
+
+    def _save_face_anim(self):
+        self.face_anim_enabled = self.face_anim_selection
+        self.config.setdefault("ui", {})["face_anim_enabled"] = self.face_anim_enabled
+        self._save_config()
+        if self.face_anim:
+            self.face_anim.set_active(False)
+        self.status = "Cara ON" if self.face_anim_enabled else "Cara OFF"
+        self.state = State.CLOCK
 
     def _save_brightness(self):
         self.config.setdefault("ui", {})["brightness_round"] = self.brightness_round
@@ -700,6 +737,14 @@ class AlarmClockApp:
         elif self.state != State.ALARM:
             self._check_alarm(now)
 
+        # Sync face animator active state with current app state
+        if self.face_anim is not None:
+            self.face_anim.set_active(self.state == State.CLOCK and self.face_anim_enabled)
+
+        # While a face clip is playing let the animator own the displays
+        if self.face_anim is not None and self.face_anim.is_playing:
+            return
+
         wifi_ssid = self._get_connected_ssid()
         round_img = self._render_round(now, wifi_ssid=wifi_ssid)
         rect_img = self._render_rect(now, wifi_ssid=wifi_ssid)
@@ -750,6 +795,8 @@ class AlarmClockApp:
             if key == "alarm_clock":
                 st = "ON" if self.alarm.get("enabled") else "OFF"
                 label = f"{st} {self.alarm.get('hour',7):02d}:{self.alarm.get('minute',0):02d}"
+            elif key == "face_anim":
+                label = f"CARA {'ON' if self.face_anim_enabled else 'OFF'}"
             return self.ui_round.render_focus(label, "Gira y pulsa", kind=key, value=val)
 
         if self.state == State.ALARM:
@@ -785,6 +832,11 @@ class AlarmClockApp:
                    if self.location_editing else "Largo: confirmar")
             return self.ui_round.render_focus("Ubicacion", sub, "location", postal_str)
 
+        if self.state == State.FACE_ANIM:
+            val = "ON" if self.face_anim_selection else "OFF"
+            sub = "Pulsa para guardar"
+            return self.ui_round.render_focus("Animacion", sub, "face_anim", val)
+
         if self.state == State.ALARM_RINGING:
             return self.ui_round.render_alarm_ringing()
 
@@ -803,6 +855,8 @@ class AlarmClockApp:
                 if key == "alarm_clock":
                     st = "ON" if self.alarm.get("enabled") else "OFF"
                     label = f"{st} {self.alarm.get('hour',7):02d}:{self.alarm.get('minute',0):02d}"
+                elif key == "face_anim":
+                    label = f"CARA {'ON' if self.face_anim_enabled else 'OFF'}"
                 dynamic_items.append((key, label))
             return self.ui_rect.render_menu(dynamic_items, self.menu_index)
         if self.state == State.ALARM:
@@ -820,6 +874,8 @@ class AlarmClockApp:
             )
         if self.state == State.LOCATION:
             return self.ui_rect.render_location(self.location_digits, self.location_digit_idx, self.location_updating, self.location_editing)
+        if self.state == State.FACE_ANIM:
+            return self.ui_rect.render_face_anim(self.face_anim_selection)
         if self.state == State.ALARM_RINGING:
             return self.ui_rect.render_ringing("Despertador", self.ring_option)
         if self.state == State.NUCLEAR_RINGING:
@@ -899,6 +955,8 @@ class AlarmClockApp:
 
     def cleanup(self):
         print("[Main] cleanup")
+        if self.face_anim:
+            self.face_anim.stop()
         if self.audio:
             self.audio.stop()
         if self.encoder:
