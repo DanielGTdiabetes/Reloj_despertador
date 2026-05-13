@@ -26,7 +26,7 @@ def generate_marimba_alarm(filepath):
             # Envolvente: ataque rápido (5 ms) + caída exponencial (percusión)
             attack = min(t / 0.005, 1.0)
             decay  = math.exp(-4.5 * t / duration)
-            sample = int(val * attack * decay * 0.55 * 32767)
+            sample = int(val * attack * decay * 0.80 * 32767)
             samples.append(struct.pack('<h', sample))
         return samples
 
@@ -42,11 +42,11 @@ def generate_marimba_alarm(filepath):
         all_samples += make_silence(pause_dur)
 
     with wave.open(filepath, 'w') as f:
-        f.setnchannels(1)
+        f.setnchannels(2)
         f.setsampwidth(2)
         f.setframerate(sample_rate)
         for s in all_samples:
-            f.writeframesraw(s)
+            f.writeframesraw(s + s)  # L + R identical
 
     print(f"Sound generated at {filepath} ({os.path.getsize(filepath)} bytes)")
 
@@ -70,7 +70,7 @@ def generate_urgent_beep(filepath):
             val = math.sin(2 * math.pi * freq * t)
             attack = min(t / 0.003, 1.0)
             release = min((duration - t) / 0.003, 1.0)
-            sample = int(val * attack * release * 0.70 * 32767)
+            sample = int(val * attack * release * 0.95 * 32767)
             samples.append(struct.pack('<h', sample))
         return samples
 
@@ -85,11 +85,62 @@ def generate_urgent_beep(filepath):
         all_samples += make_silence(pair_gap)
 
     with wave.open(filepath, 'w') as f:
-        f.setnchannels(1)
+        f.setnchannels(2)
         f.setsampwidth(2)
         f.setframerate(sample_rate)
         for s in all_samples:
-            f.writeframesraw(s)
+            f.writeframesraw(s + s)  # L + R identical
+
+    print(f"Sound generated at {filepath} ({os.path.getsize(filepath)} bytes)")
+
+
+def generate_nuclear_alarm(filepath):
+    """Sirena de defensa civil — sweep 440→1760 Hz, imposible ignorar."""
+    sample_rate = 44100
+    os.makedirs(os.path.dirname(filepath) if os.path.dirname(filepath) else ".", exist_ok=True)
+
+    freq_low  = 440.0
+    freq_high = 1760.0
+    sweep_up   = 1.0
+    sweep_down = 0.8
+    hold_top   = 0.1
+    cycles     = 5
+
+    all_samples = []
+    phase = 0.0
+
+    for _ in range(cycles):
+        # subida
+        n = int(sample_rate * sweep_up)
+        for i in range(n):
+            t = i / sample_rate
+            freq = freq_low + (freq_high - freq_low) * (t / sweep_up)
+            phase += 2 * math.pi * freq / sample_rate
+            sample = int(math.sin(phase) * 0.95 * 32767)
+            all_samples.append(struct.pack('<h', sample))
+
+        # cima
+        n = int(sample_rate * hold_top)
+        for _ in range(n):
+            phase += 2 * math.pi * freq_high / sample_rate
+            sample = int(math.sin(phase) * 0.95 * 32767)
+            all_samples.append(struct.pack('<h', sample))
+
+        # bajada
+        n = int(sample_rate * sweep_down)
+        for i in range(n):
+            t = i / sample_rate
+            freq = freq_high - (freq_high - freq_low) * (t / sweep_down)
+            phase += 2 * math.pi * freq / sample_rate
+            sample = int(math.sin(phase) * 0.95 * 32767)
+            all_samples.append(struct.pack('<h', sample))
+
+    with wave.open(filepath, 'w') as f:
+        f.setnchannels(2)
+        f.setsampwidth(2)
+        f.setframerate(sample_rate)
+        for s in all_samples:
+            f.writeframesraw(s + s)
 
     print(f"Sound generated at {filepath} ({os.path.getsize(filepath)} bytes)")
 
@@ -97,3 +148,4 @@ def generate_urgent_beep(filepath):
 if __name__ == "__main__":
     generate_marimba_alarm(r"D:\Reloj_despertador\src\assets\sounds\alarm1.wav")
     generate_urgent_beep(r"D:\Reloj_despertador\src\assets\sounds\alarm2.wav")
+    generate_nuclear_alarm(r"D:\Reloj_despertador\src\assets\sounds\alarm_nuclear.wav")

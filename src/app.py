@@ -34,6 +34,7 @@ class State:
     WIFI_SCAN = "wifi_scan"
     WIFI_PASSWORD = "wifi_password"
     ALARM_RINGING = "alarm_ringing"
+    NUCLEAR_RINGING = "nuclear_ringing"
     LOCATION = "location"
     STANDBY = "standby"
 
@@ -85,6 +86,7 @@ class AlarmClockApp:
         self.last_alarm_key = None
         self.ring_option = 0
         self.snoozed_until = 0
+        self._nuclear_started_at = 0
 
         ui_cfg = self.config.get("ui", {})
         self.brightness_round = int(ui_cfg.get("brightness_round", 80))
@@ -358,6 +360,8 @@ class AlarmClockApp:
                 self._stop_alarm()
             else:
                 self._snooze_alarm()
+        elif self.state == State.NUCLEAR_RINGING:
+            self._stop_alarm()
 
     def _handle_long_press(self) -> None:
         if self.state == State.CLOCK:
@@ -376,8 +380,8 @@ class AlarmClockApp:
         elif self.state == State.LOCATION:
             self.location_editing = False
             self._location_confirm()
-        elif self.state == State.ALARM_RINGING:
-            self._snooze_alarm()
+        elif self.state in (State.ALARM_RINGING, State.NUCLEAR_RINGING):
+            self._stop_alarm()
         else:
             self.state = State.CLOCK
 
@@ -445,7 +449,7 @@ class AlarmClockApp:
             self._apply_brightness()
 
     def _update_auto_dim(self) -> None:
-        if self._dimmed or self.state in (State.ALARM_RINGING, State.STANDBY):
+        if self._dimmed or self.state in (State.ALARM_RINGING, State.NUCLEAR_RINGING, State.STANDBY):
             return
         if time.time() - self._last_interaction < DIM_TIMEOUT:
             return
@@ -651,6 +655,21 @@ class AlarmClockApp:
         elif not self.audio:
             print("[Alarm] no audio device")
 
+    def _trigger_nuclear_alarm(self):
+        if self.audio:
+            self.audio.stop()
+        self.state = State.NUCLEAR_RINGING
+        self._nuclear_started_at = time.time()
+        self.status = "ALARMA NUCLEAR"
+        audio_cfg = self.config.get("audio", {})
+        path = audio_cfg.get("nuclear_sound", "src/assets/sounds/alarm_nuclear.wav")
+        if not os.path.isabs(path):
+            path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", path))
+        print(f"[Alarm] nuclear trigger path={path} exists={os.path.exists(path)}")
+        if self.audio and os.path.exists(path):
+            self.audio.set_volume(100)
+            self.audio.play_file(path, loop=True)
+
     def _stop_alarm(self):
         if self.audio:
             self.audio.stop()
@@ -673,8 +692,11 @@ class AlarmClockApp:
         now = self.clock.now()
         if self.state == State.ALARM_RINGING:
             if time.time() - getattr(self, "_alarm_started_at", time.time()) >= 8 * 60:
+                self._trigger_nuclear_alarm()
+        elif self.state == State.NUCLEAR_RINGING:
+            if time.time() - self._nuclear_started_at >= 2 * 60:
                 self._stop_alarm()
-                self.status = "Alarma auto-apagada"
+                self.status = "Alarma terminada"
         elif self.state != State.ALARM:
             self._check_alarm(now)
 
@@ -766,6 +788,9 @@ class AlarmClockApp:
         if self.state == State.ALARM_RINGING:
             return self.ui_round.render_alarm_ringing()
 
+        if self.state == State.NUCLEAR_RINGING:
+            return self.ui_round.render_alarm_ringing()
+
         return None
 
     def _render_rect(self, now, wifi_ssid=""):
@@ -797,6 +822,8 @@ class AlarmClockApp:
             return self.ui_rect.render_location(self.location_digits, self.location_digit_idx, self.location_updating, self.location_editing)
         if self.state == State.ALARM_RINGING:
             return self.ui_rect.render_ringing("Despertador", self.ring_option)
+        if self.state == State.NUCLEAR_RINGING:
+            return self.ui_rect.render_ringing("!! NUCLEAR !!", 0)
         return None
 
     def _forecast_for_ui(self):

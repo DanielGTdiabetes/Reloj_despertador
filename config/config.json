@@ -53,11 +53,12 @@
     },
     "audio": {
         "enabled": true,
-        "device": "KT USB Audio",
+        "device": "USB Audio",
         "alarm_sounds": [
             "src/assets/sounds/alarm1.wav",
             "src/assets/sounds/alarm2.wav"
-        ]
+        ],
+        "nuclear_sound": "src/assets/sounds/alarm_nuclear.wav"
     },
     "alarm": {
         "enabled": false,
@@ -65,7 +66,7 @@
         "minute": 0,
         "days": [0, 1, 2, 3, 4, 5, 6],
         "snooze_minutes": 5,
-        "volume": 80
+        "volume": 100
     },
     "ntp": {
         "servers": ["pool.ntp.org", "time.nist.gov"],

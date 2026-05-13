@@ -44,28 +44,67 @@ class I2SAudio:
             pass
         return "plughw:0,0", "0"
 
+    def _max_out_cset_volumes(self):
+        """Set all hardware volume controls to their maximum raw value via cset."""
+        try:
+            out = subprocess.check_output(
+                ["amixer", "-c", self._card_num, "contents"],
+                stderr=subprocess.DEVNULL, text=True,
+            )
+        except Exception:
+            return
+        import re
+        current_numid = None
+        max_val = None
+        is_volume = False
+        for line in out.splitlines():
+            m = re.match(r"numid=(\d+).*name='(.+)'", line)
+            if m:
+                current_numid = m.group(1)
+                name = m.group(2).lower()
+                is_volume = "volume" in name and "capture" not in name
+                max_val = None
+            elif is_volume and "min=" in line:
+                m2 = re.search(r"max=(\d+)", line)
+                if m2:
+                    max_val = m2.group(1)
+            elif is_volume and max_val and line.strip().startswith(": values="):
+                vals = line.strip()[len(": values="):]
+                count = len(vals.split(","))
+                raw = ",".join([max_val] * count)
+                try:
+                    subprocess.run(
+                        ["amixer", "-c", self._card_num, "cset",
+                         f"numid={current_numid}", raw],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    )
+                except Exception:
+                    pass
+
     def set_volume(self, percent):
         self._volume = max(0, min(100, percent))
         v = self._volume
-        # KT USB Audio uses a non-simple control — must use cset numid=3
-        try:
-            subprocess.run(
-                ["amixer", "-c", self._card_num, "cset", "numid=3", f"{v},{v}"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
-            )
-            return
-        except subprocess.CalledProcessError:
-            pass
-        # Fallback for other cards with simple controls
-        for control in ("PCM", "Speaker", "Master", "Headphone"):
+        # Max out every hardware control regardless of chip — works for any USB DAC
+        for control in ("PCM Playback Volume", "Headphone Playback Volume",
+                        "Speaker", "Master", "Headphone", "PCM"):
             try:
                 subprocess.run(
-                    ["amixer", "-c", self._card_num, "sset", control, f"{v}%"],
+                    ["amixer", "-c", self._card_num, "sset", control, "100%"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
                 )
-                break
             except subprocess.CalledProcessError:
-                continue
+                pass
+        # Some USB DACs use non-TLV controls only settable via cset with raw values
+        self._max_out_cset_volumes()
+
+        # Actual volume via softvol "PCM Boost" (.asoundrc); created on first device open
+        try:
+            subprocess.run(
+                ["amixer", "-c", self._card_num, "sset", "PCM Boost", f"{v}%"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
+            )
+        except subprocess.CalledProcessError:
+            pass
 
     def play_file(self, filepath, loop=False):
         if not os.path.exists(filepath):
