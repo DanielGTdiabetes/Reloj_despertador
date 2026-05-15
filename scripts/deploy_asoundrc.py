@@ -7,25 +7,17 @@ PI_PASS = "26021980"
 
 # Routes both stereo channels to a single mono output so one speaker works
 # regardless of which jack (L or R) it is connected to.
+# Uses CARD=Audio (by name) instead of plughw:N,0 so the card number doesn't
+# matter — USB card number can shift between reboots if other devices change.
 ASOUNDRC = """\
-pcm.ugreen_route {
-    type route
-    slave.pcm "plughw:2,0"
-    slave.channels 2
-    ttable.0.0 1.0
-    ttable.0.1 1.0
-    ttable.1.0 1.0
-    ttable.1.1 1.0
-}
-
 pcm.ugreen {
     type plug
-    slave.pcm "ugreen_route"
+    slave.pcm "plughw:CARD=Audio,DEV=0"
 }
 
 ctl.ugreen {
     type hw
-    card 2
+    card Audio
 }
 
 pcm.!default {
@@ -46,6 +38,10 @@ sftp.close()
 # Verify
 _, out, _ = client.exec_command("cat ~/.asoundrc")
 print(out.read().decode())
+
+# Max out hardware PCM volume
+_, out, _ = client.exec_command("amixer -c Audio sset 'PCM Playback Volume' 100% 2>&1")
+print("hw vol:", out.read().decode().strip() or "OK")
 
 # Quick smoke test: play beep via the mono device
 _, out, err = client.exec_command(
