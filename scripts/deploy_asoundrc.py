@@ -10,9 +10,31 @@ PI_PASS = "26021980"
 # Uses CARD=Audio (by name) instead of plughw:N,0 so the card number doesn't
 # matter — USB card number can shift between reboots if other devices change.
 ASOUNDRC = """\
+pcm.ugreen_boost {
+    type softvol
+    slave.pcm "plughw:CARD=Audio,DEV=0"
+    control {
+        name "PCM Boost"
+        card Audio
+    }
+    min_dB -51.0
+    max_dB 20.0
+    resolution 100
+}
+
+pcm.ugreen_route {
+    type route
+    slave.pcm "ugreen_boost"
+    slave.channels 2
+    ttable.0.0 1.0
+    ttable.0.1 1.0
+    ttable.1.0 1.0
+    ttable.1.1 1.0
+}
+
 pcm.ugreen {
     type plug
-    slave.pcm "plughw:CARD=Audio,DEV=0"
+    slave.pcm "ugreen_route"
 }
 
 ctl.ugreen {
